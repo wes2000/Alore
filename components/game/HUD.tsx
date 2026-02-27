@@ -16,6 +16,7 @@ export default function HUD({ engine }: HUDProps) {
     playerGold, playerX, playerY, currentBiome, fps,
     activePanel, togglePanel, notifications,
     interactPrompt, gatherProgress,
+    playerATK, playerDEF,
   } = useGameStore()
 
   const hpPct     = Math.max(0, (playerHP / Math.max(1, playerMaxHP)) * 100)
@@ -56,6 +57,12 @@ export default function HUD({ engine }: HUDProps) {
               style={{ width: `${energyPct}%` }}
             />
           </div>
+        </div>
+
+        {/* Combat stats row */}
+        <div className="flex gap-3 text-[10px] text-gray-500 pt-0.5">
+          <span className="text-orange-400">⚔ {playerATK} ATK</span>
+          <span className="text-sky-400">🛡 {playerDEF} DEF</span>
         </div>
 
         {/* Gather Progress Bar (only visible while gathering) */}

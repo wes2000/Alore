@@ -60,6 +60,7 @@ export class GatheringSystem {
   private skillSystem: SkillSystem
   private job: GatherJob | null = null
   private onComplete: (chunkKey: string, nodeId: string, nodeType: ResourceNodeType, itemId: string, qty: number) => void
+  private progressEmitSkip = 0  // emit every 3rd tick (~20fps instead of 60fps)
 
   constructor(
     player: PlayerState,
@@ -99,7 +100,13 @@ export class GatheringSystem {
     if (!this.job) return
 
     this.job.progress = Math.min(1, this.job.progress + dt / this.job.duration)
-    eventBus.emit('gather:progress', { progress: this.job.progress })
+
+    // Throttle progress events to ~20fps (every 3 game ticks) to reduce React re-renders
+    this.progressEmitSkip++
+    if (this.progressEmitSkip >= 3) {
+      this.progressEmitSkip = 0
+      eventBus.emit('gather:progress', { progress: this.job.progress })
+    }
 
     if (this.job.progress >= 1) {
       this.finish()

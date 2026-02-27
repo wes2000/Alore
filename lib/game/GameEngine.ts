@@ -72,6 +72,12 @@ export class GameEngine {
   private mobEntityIds = new Set<string>()
   private lastInteractLabel = ''
 
+  // Change-detection for player stat events (avoids 60fps React re-renders)
+  private prevHpRounded    = -1
+  private prevMaxHp        = -1
+  private prevEnergyRounded = -1
+  private prevMaxEnergy    = -1
+
   constructor(canvas: HTMLCanvasElement, playerId: string) {
     this.playerState = createDefaultPlayer(playerId)
 
@@ -164,15 +170,38 @@ export class GameEngine {
       const reduced = Math.max(1, damage - reduction)
       p.hp = Math.max(0, p.hp - reduced)
       this.entityRenderer.flash('player', 0xff2222, 200)
-      eventBus.emit('player:hp_changed', { current: p.hp, max: p.maxHp })
+      this.forceEmitPlayerHP()
       if (p.hp <= 0) {
         eventBus.emit('ui:notification', { message: 'You were defeated!', type: 'danger' })
         p.hp = Math.max(1, Math.floor(p.maxHp * 0.5))
         p.x = 16; p.y = 16
-        eventBus.emit('player:hp_changed', { current: p.hp, max: p.maxHp })
+        this.forceEmitPlayerHP()
         eventBus.emit('ui:notification', { message: 'Respawned at starting area.', type: 'warning' })
       }
     })
+
+    // Skill level-up: golden flash + force-push new max HP/energy to HUD
+    eventBus.on('skill:level_up', ({ skill, newLevel }) => {
+      this.entityRenderer.flash('player', 0xffee00, 600)
+      // Force re-emit stats so HUD picks up new maxHp / maxEnergy immediately
+      this.prevHpRounded     = -1
+      this.prevMaxHp         = -1
+      this.prevEnergyRounded = -1
+      this.prevMaxEnergy     = -1
+      const skillName = skill.charAt(0).toUpperCase() + skill.slice(1).toLowerCase()
+      eventBus.emit('ui:notification', {
+        message: `${skillName} Level ${newLevel}!`,
+        type: 'success',
+      })
+    })
+  }
+
+  /** Force-emit player HP event regardless of change-detection state. */
+  private forceEmitPlayerHP(): void {
+    const p = this.playerState
+    this.prevHpRounded = Math.round(p.hp)
+    this.prevMaxHp     = p.maxHp
+    eventBus.emit('player:hp_changed', { current: p.hp, max: p.maxHp })
   }
 
   // ─── Update (fixed timestep) ─────────────────────────────────────────────
@@ -191,7 +220,7 @@ export class GameEngine {
 
     this.handlePlayerAttack()
     this.handleInteract()
-    this.checkNearbyInteractions()
+    if (this.tickCount % 6 === 0) this.checkNearbyInteractions()
     this.syncMobsToRenderer()
     this.mobSpawner.removeDead()
 
@@ -236,8 +265,19 @@ export class GameEngine {
     if (!this.isBlocked(newX, p.y)) p.x = newX
     if (!this.isBlocked(p.x, newY)) p.y = newY
 
-    eventBus.emit('player:hp_changed',     { current: p.hp,     max: p.maxHp })
-    eventBus.emit('player:energy_changed', { current: p.energy, max: p.maxEnergy })
+    // Only emit when integer-rounded values actually change — prevents 60fps React re-renders
+    const hpR = Math.round(p.hp)
+    if (hpR !== this.prevHpRounded || p.maxHp !== this.prevMaxHp) {
+      this.prevHpRounded = hpR
+      this.prevMaxHp     = p.maxHp
+      eventBus.emit('player:hp_changed', { current: p.hp, max: p.maxHp })
+    }
+    const enR = Math.round(p.energy)
+    if (enR !== this.prevEnergyRounded || p.maxEnergy !== this.prevMaxEnergy) {
+      this.prevEnergyRounded = enR
+      this.prevMaxEnergy     = p.maxEnergy
+      eventBus.emit('player:energy_changed', { current: p.energy, max: p.maxEnergy })
+    }
 
     this.entityRenderer.updatePosition('player', p.x, p.y)
     this.healthBars.setHealth('player', p.x, p.y, p.hp / p.maxHp)
@@ -293,7 +333,6 @@ export class GameEngine {
         pet.name,
         0.6
       )
-      this.entityRenderer.updatePosition(`pet_${pet.instanceId}`, targetX, targetY)
       this.healthBars.setHealth(
         `pet_${pet.instanceId}`,
         targetX, targetY,
@@ -636,6 +675,19 @@ export class GameEngine {
     const p = this.playerState
     const chunk = this.chunkSystem.getChunkAt(Math.floor(p.x), Math.floor(p.y))
     return chunk.biome
+  }
+
+  /** Derived combat/progression stats for the HUD. */
+  getComputedStats(): { atk: number; def: number; maxHp: number; maxEnergy: number } {
+    const p = this.playerState
+    const meleeLvl = this.skillSystem.getSkillLevel(SkillType.Melee)
+    const defLvl   = this.skillSystem.getSkillLevel(SkillType.Defense)
+    return {
+      atk:       PLAYER_ATTACK_BASE_DMG + (meleeLvl - 1) * 2,
+      def:       Math.floor(defLvl * 0.4),
+      maxHp:     p.maxHp,
+      maxEnergy: p.maxEnergy,
+    }
   }
 
   /** Expose a chunk by coords — used by Minimap. */

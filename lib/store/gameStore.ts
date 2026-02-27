@@ -20,6 +20,10 @@ interface GameStore {
   currentBiome: BiomeType | null
   fps:          number
 
+  // Derived combat stats (updated on skill level-up)
+  playerATK: number   // base attack damage
+  playerDEF: number   // flat damage reduction
+
   // Interaction / gathering prompts
   interactPrompt: string | null
   gatherProgress: number | null   // 0–1 while gathering, null when idle
@@ -35,6 +39,7 @@ interface GameStore {
   setPlayerPos:   (x: number, y: number) => void
   setBiome:       (biome: BiomeType) => void
   setFPS:         (fps: number) => void
+  setPlayerStats:    (atk: number, def: number) => void
   setInteractPrompt: (label: string | null) => void
   setGatherProgress: (progress: number | null) => void
   setPanel:       (panel: GameStore['activePanel']) => void
@@ -54,6 +59,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   playerY:        0,
   currentBiome:   null,
   fps:            0,
+  playerATK:      12,
+  playerDEF:      0,
   interactPrompt: null,
   gatherProgress: null,
   activePanel:    null,
@@ -65,6 +72,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setPlayerPos:      (x, y)       => set({ playerX: x, playerY: y }),
   setBiome:          (biome)      => set({ currentBiome: biome }),
   setFPS:            (fps)        => set({ fps }),
+  setPlayerStats:    (atk, def)   => set({ playerATK: atk, playerDEF: def }),
   setInteractPrompt: (label)      => set({ interactPrompt: label }),
   setGatherProgress: (progress)   => set({ gatherProgress: progress }),
 

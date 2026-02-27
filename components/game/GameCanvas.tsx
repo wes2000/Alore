@@ -47,6 +47,16 @@ export default function GameCanvas() {
       eventBus.on('ui:panel_close',        ()                 => store.setPanel(null)),
       eventBus.on('interact:nearby',       ({ label })        => store.setInteractPrompt(label)),
       eventBus.on('interact:clear',        ()                 => store.setInteractPrompt(null)),
+      // On level-up, immediately push new maxHp/maxEnergy + stats to the HUD
+      eventBus.on('skill:level_up', () => {
+        const engine = engineRef.current
+        if (!engine) return
+        const p = engine.playerState
+        store.setPlayerHP(p.hp, p.maxHp)
+        store.setPlayerEnergy(p.energy, p.maxEnergy)
+        const { atk, def } = engine.getComputedStats()
+        store.setPlayerStats(atk, def)
+      }),
       eventBus.on('gather:progress',       ({ progress })     => store.setGatherProgress(progress)),
       eventBus.on('gather:complete',       ()                 => store.setGatherProgress(null)),
       eventBus.on('gather:cancel',         ()                 => store.setGatherProgress(null)),
@@ -61,11 +71,15 @@ export default function GameCanvas() {
     return () => unsubs.forEach(u => u())
   }, [store])
 
-  // FPS polling
+  // FPS + computed stats polling (stats update rarely so 2s is fine)
   useEffect(() => {
     const tick = setInterval(() => {
-      if (engineRef.current) store.setFPS(engineRef.current.fps)
-    }, 1000)
+      const engine = engineRef.current
+      if (!engine) return
+      store.setFPS(engine.fps)
+      const { atk, def } = engine.getComputedStats()
+      store.setPlayerStats(atk, def)
+    }, 2000)
     return () => clearInterval(tick)
   }, [store])
 
