@@ -6,6 +6,7 @@ import { CHUNK_SIZE } from './world/BiomeMap'
 import { SceneRenderer } from './renderer/SceneRenderer'
 import { ChunkRenderer } from './renderer/ChunkRenderer'
 import { EntityRenderer, HealthBarRenderer } from './renderer/EntityRenderer'
+import { SpriteManager, PlayerDirection } from './renderer/SpriteManager'
 import { GameLoop } from './engine/GameLoop'
 import { InputSystem } from './engine/InputSystem'
 import { eventBus } from './engine/EventBus'
@@ -41,11 +42,17 @@ export class GameEngine {
   combatSystem: CombatSystem
   tamingSystem: TamingSystem
 
+  // Sprite rendering
+  private spriteManager: SpriteManager
+
   // State tracking
   private initialized = false
   private tickCount = 0
   private prevChunkKey = ''
   private prevBiome: BiomeType | null = null
+  private playerDir: PlayerDirection = 'down'
+  private playerFrame = 0
+  private playerFrameTick = 0
 
   constructor(canvas: HTMLCanvasElement, playerId: string) {
     this.playerState = createDefaultPlayer(playerId)
@@ -70,6 +77,9 @@ export class GameEngine {
     this.petSystem    = new PetSystem(this.playerState)
     this.combatSystem = new CombatSystem()
     this.tamingSystem = new TamingSystem(this.playerState, this.petSystem, this.skillSystem)
+
+    // Sprite manager (loads async; renderers get it once ready)
+    this.spriteManager = new SpriteManager()
 
     // Game loop
     this.gameLoop = new GameLoop(
@@ -100,6 +110,14 @@ export class GameEngine {
     // Pre-warm chunks around spawn
     this.chunkSystem.preloadAround(this.playerState.x, this.playerState.y, PRELOAD_RADIUS)
     this.syncChunksToRenderer()
+
+    // Load sprites asynchronously; rebake chunks once ready
+    this.spriteManager.load().then(() => {
+      this.chunkRenderer.setSpriteManager(this.spriteManager)
+      this.entityRenderer.setSpriteManager(this.spriteManager)
+      this.chunkRenderer.rebakeAll()
+      this.syncChunksToRenderer()
+    })
 
     this.initialized = true
     this.gameLoop.start()
@@ -171,22 +189,37 @@ export class GameEngine {
     this.entityRenderer.updatePosition('player', p.x, p.y)
     this.healthBars.setHealth('player', p.x, p.y, p.hp / p.maxHp)
 
-    // Award exploration XP when moving
-    if (move.x !== 0 || move.y !== 0) {
+    // Direction tracking for sprite animation
+    const isMoving = move.x !== 0 || move.y !== 0
+    if (move.x > 0.1)       this.playerDir = 'right'
+    else if (move.x < -0.1) this.playerDir = 'left'
+    else if (move.y > 0.1)  this.playerDir = 'down'
+    else if (move.y < -0.1) this.playerDir = 'up'
+
+    if (isMoving) {
+      this.playerFrameTick++
+      if (this.playerFrameTick >= 10) {
+        this.playerFrameTick = 0
+        this.playerFrame = (this.playerFrame + 1) % 3
+      }
       this.playerState.playtime += dt
+    } else {
+      this.playerFrame = 0
     }
+    this.entityRenderer.setPlayerFrame(this.playerDir, this.playerFrame)
   }
 
   private isBlocked(x: number, y: number): boolean {
-    const tileX = Math.floor(x + 0.5)
-    const tileY = Math.floor(y + 0.5)
-    const tile = this.chunkSystem.getTileAt(tileX, tileY)
-    // Check surrounding tiles for better collision
-    for (let dx = 0; dx <= 0; dx++) {
-      for (let dy = 0; dy <= 0; dy++) {
-        const t = this.chunkSystem.getTileAt(Math.floor(x + 0.4), Math.floor(y + 0.4))
-        if (isImpassable(t)) return true
-      }
+    const r = 0.35  // half-size collision radius
+    const cx = x + 0.5
+    const cy = y + 0.5
+    // Check all 4 corners of the player's bounding box
+    const corners: [number, number][] = [
+      [cx - r, cy - r], [cx + r, cy - r],
+      [cx - r, cy + r], [cx + r, cy + r],
+    ]
+    for (const [wx, wy] of corners) {
+      if (isImpassable(this.chunkSystem.getTileAt(Math.floor(wx), Math.floor(wy)))) return true
     }
     return false
   }

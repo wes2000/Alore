@@ -265,8 +265,8 @@ export const BIOME_DEFINITIONS: Record<BiomeType, BiomeDefinition> = {
 
 // Tile passability — true = impassable
 export const TILE_IMPASSABLE: Partial<Record<TileType, boolean>> = {
-  [TileType.DenseTree]: true,
-  [TileType.Tree]: false,  // passable (just visual)
+  [TileType.DenseTree]: false,  // trees are visual; resource node entities block separately
+  [TileType.Tree]: false,       // passable (just visual)
   [TileType.Mountain]: true,
   [TileType.DeepWater]: true,
   [TileType.Water]: true,

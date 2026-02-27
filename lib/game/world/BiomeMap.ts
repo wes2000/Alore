@@ -21,11 +21,11 @@ export function sampleBiome(
   if (elevation < DEEP_WATER_ELEVATION_THRESHOLD) return BiomeType.DeepWater
   if (elevation < WATER_ELEVATION_THRESHOLD) return BiomeType.ShallowWater
 
-  // Distance-from-spawn pushes dangerous biomes to be further away
-  // by blending temp/moisture toward moderate values near spawn
+  // Distance-from-spawn pushes dangerous biomes to be further away.
+  // Target mild-temp (0.45) + low-moisture (0.2) → BIOME_LOOKUP[1][0] = Plains near spawn.
   const distFactor = Math.min(distanceFromSpawn / 600, 1)
-  const blendedTemp = temperature * distFactor + 0.5 * (1 - distFactor)
-  const blendedMoist = moisture * distFactor + 0.5 * (1 - distFactor)
+  const blendedTemp = temperature * distFactor + 0.45 * (1 - distFactor)
+  const blendedMoist = moisture * distFactor + 0.2 * (1 - distFactor)
 
   const tempIdx  = blendedTemp  < 0.33 ? 0 : blendedTemp  < 0.66 ? 1 : 2
   const moistIdx = blendedMoist < 0.33 ? 0 : blendedMoist < 0.66 ? 1 : 2

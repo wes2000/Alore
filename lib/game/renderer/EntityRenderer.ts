@@ -1,8 +1,10 @@
 import * as THREE from 'three'
 import { PetArchetype } from '../data/types'
+import { SpriteManager, PlayerDirection } from './SpriteManager'
 
 interface EntityVisual {
   mesh: THREE.Mesh
+  kind: EntityKind
   labelCanvas?: HTMLCanvasElement
   labelSprite?: THREE.Sprite
   prevX: number
@@ -14,16 +16,29 @@ interface EntityVisual {
 // Entity types for the renderer
 export type EntityKind = 'player' | 'pet' | 'mob'
 
-/** Simple colored quad renderer for entities.
- *  Each entity = one PlaneGeometry quad with a color.
- *  Labels rendered as canvas sprites above.
+/** Colored quad renderer for entities with optional sprite support.
+ *  Player entity uses a sprite sheet texture when SpriteManager is available.
  */
 export class EntityRenderer {
   private scene: THREE.Scene
   private entities = new Map<string, EntityVisual>()
+  private sprites: SpriteManager | null = null
+  private playerDir: PlayerDirection = 'down'
+  private playerFrame = 0
+  private playerSpriteApplied = false  // tracks if sprite texture was applied
 
   constructor(scene: THREE.Scene) {
     this.scene = scene
+  }
+
+  setSpriteManager(sm: SpriteManager): void {
+    this.sprites = sm
+  }
+
+  /** Called each tick from GameEngine to drive player animation. */
+  setPlayerFrame(direction: PlayerDirection, frame: number): void {
+    this.playerDir = direction
+    this.playerFrame = frame
   }
 
   addEntity(
@@ -68,6 +83,7 @@ export class EntityRenderer {
 
     this.entities.set(id, {
       mesh,
+      kind,
       labelCanvas,
       labelSprite,
       prevX: x, prevY: y,
@@ -104,12 +120,30 @@ export class EntityRenderer {
 
   /** Interpolated render — alpha is 0..1 between logic ticks */
   render(alpha: number): void {
-    for (const e of this.entities.values()) {
+    // Lazily apply player sprite texture once it becomes available
+    if (!this.playerSpriteApplied && this.sprites?.playerTexture) {
+      const playerEntity = this.entities.get('player')
+      if (playerEntity) {
+        const mat = playerEntity.mesh.material as THREE.MeshBasicMaterial
+        mat.map = this.sprites.playerTexture
+        mat.color.setHex(0xffffff)  // white = no tint, show sprite as-is
+        mat.transparent = true
+        mat.needsUpdate = true
+        this.playerSpriteApplied = true
+      }
+    }
+
+    for (const [id, e] of this.entities) {
       const ix = e.prevX + (e.currX - e.prevX) * alpha
       const iy = e.prevY + (e.currY - e.prevY) * alpha
       e.mesh.position.set(ix + 0.5, -(iy + 0.5), 0.5)
       if (e.labelSprite) {
         e.labelSprite.position.set(ix + 0.5, -(iy + 0.5) + 0.8, 0.6)
+      }
+
+      // Animate player sprite frame
+      if (id === 'player' && this.playerSpriteApplied && this.sprites?.playerTexture) {
+        this.sprites.applyPlayerFrame(this.sprites.playerTexture, this.playerDir, this.playerFrame)
       }
     }
   }

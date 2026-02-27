@@ -3,10 +3,11 @@ import { ChunkState, TileType } from '../data/types'
 import { getTileColor } from '../data/biomes'
 import { isDungeonFloor } from '../world/DungeonGenerator'
 import { CHUNK_SIZE } from '../world/BiomeMap'
+import { SpriteManager } from './SpriteManager'
 
-// Pixels per tile in the canvas texture
-const CANVAS_TILE_PX = 8
-const CANVAS_SIZE = CHUNK_SIZE * CANVAS_TILE_PX  // 256px
+// Pixels per tile in the canvas texture (16 gives better sprite quality than 8)
+const CANVAS_TILE_PX = 16
+const CANVAS_SIZE = CHUNK_SIZE * CANVAS_TILE_PX  // 512px
 
 // Dungeon tile colors
 const DUNGEON_FLOOR_COLOR = '#2a2030'
@@ -26,6 +27,7 @@ export class ChunkRenderer {
   private textures = new Map<string, THREE.CanvasTexture>()
   private canvas2d: HTMLCanvasElement
   private ctx2d: CanvasRenderingContext2D
+  private sprites: SpriteManager | null = null
 
   constructor(scene: THREE.Scene) {
     this.scene = scene
@@ -36,8 +38,28 @@ export class ChunkRenderer {
     this.ctx2d = this.canvas2d.getContext('2d')!
   }
 
+  setSpriteManager(sm: SpriteManager): void {
+    this.sprites = sm
+  }
+
   private key(cx: number, cy: number): string {
     return `${cx}_${cy}`
+  }
+
+  /** Re-bake all cached chunk textures (call after sprites finish loading). */
+  rebakeAll(): void {
+    // We need to access the chunk data to repaint, but we only cache the mesh/texture.
+    // Mark all textures as stale by clearing the mesh map — next addChunk call will repaint.
+    // ChunkSystem will re-add them via syncChunksToRenderer.
+    for (const [k, mesh] of this.meshes) {
+      const tex = this.textures.get(k)
+      if (tex) { tex.dispose() }
+      this.scene.remove(mesh)
+      ;(mesh.material as THREE.Material).dispose()
+      mesh.geometry.dispose()
+    }
+    this.meshes.clear()
+    this.textures.clear()
   }
 
   addChunk(chunk: ChunkState): void {
@@ -128,14 +150,17 @@ export class ChunkRenderer {
             ctx.fillStyle = DUNGEON_WALL_COLOR
           }
         } else {
-          // Normal world chunk
+          // Normal world chunk — try sprite first, fallback to color
           const tileType = chunk.tiles[ty][tx] as unknown as TileType
-          const colorNum = getTileColor(tileType)
-          ctx.fillStyle = numToHex(colorNum)
-          // Add slight variation using tile position
-          const vary = ((tx * 7 + ty * 13) & 0x0f) / 256 * 0.08
           ctx.globalAlpha = 1
-          ctx.fillStyle = varyColor(colorNum, vary)
+          if (!this.sprites?.drawTile(ctx, tileType, px, py, CANVAS_TILE_PX)) {
+            // Fallback: colored rect with subtle variation
+            const colorNum = getTileColor(tileType)
+            const vary = ((tx * 7 + ty * 13) & 0x0f) / 256 * 0.08
+            ctx.fillStyle = varyColor(colorNum, vary)
+            ctx.fillRect(px, py, CANVAS_TILE_PX, CANVAS_TILE_PX)
+          }
+          continue
         }
 
         ctx.fillRect(px, py, CANVAS_TILE_PX, CANVAS_TILE_PX)
