@@ -3,12 +3,19 @@
 import { useGameStore } from '@/lib/store/gameStore'
 import { BiomeType } from '@/lib/game/data/types'
 import { BIOME_DEFINITIONS } from '@/lib/game/data/biomes'
+import { GameEngine } from '@/lib/game/GameEngine'
+import Minimap from './Minimap'
 
-export default function HUD() {
+interface HUDProps {
+  engine: GameEngine | null
+}
+
+export default function HUD({ engine }: HUDProps) {
   const {
     playerHP, playerMaxHP, playerEnergy, playerMaxEnergy,
     playerGold, playerX, playerY, currentBiome, fps,
     activePanel, togglePanel, notifications,
+    interactPrompt, gatherProgress,
   } = useGameStore()
 
   const hpPct     = Math.max(0, (playerHP / Math.max(1, playerMaxHP)) * 100)
@@ -50,15 +57,43 @@ export default function HUD() {
             />
           </div>
         </div>
+
+        {/* Gather Progress Bar (only visible while gathering) */}
+        {gatherProgress !== null && (
+          <div>
+            <div className="flex justify-between text-xs text-game-text mb-0.5">
+              <span className="text-yellow-300 font-bold">⛏ Gathering...</span>
+              <span>{Math.round(gatherProgress * 100)}%</span>
+            </div>
+            <div className="h-2.5 bg-game-panel rounded-sm border border-game-border overflow-hidden">
+              <div
+                className="h-full rounded-sm bg-yellow-400 transition-none"
+                style={{ width: `${gatherProgress * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* ── Top-right: Info ── */}
-      <div className="absolute right-3 top-3 text-right text-xs text-game-text flex flex-col gap-0.5">
-        <span className="text-game-gold font-bold">🪙 {playerGold.toLocaleString()}</span>
-        <span className="text-gray-400">{biomeName}</span>
-        <span className="text-gray-500">{Math.floor(playerX)}, {Math.floor(playerY)}</span>
-        <span className="text-gray-600 text-[10px]">{fps} FPS</span>
+      {/* ── Top-right: Info + Minimap ── */}
+      <div className="absolute right-3 top-3 flex flex-col items-end gap-2">
+        <div className="text-right text-xs text-game-text flex flex-col gap-0.5">
+          <span className="text-game-gold font-bold">🪙 {playerGold.toLocaleString()}</span>
+          <span className="text-gray-400">{biomeName}</span>
+          <span className="text-gray-500">{Math.floor(playerX)}, {Math.floor(playerY)}</span>
+          <span className="text-gray-600 text-[10px]">{fps} FPS</span>
+        </div>
+        <Minimap engine={engine} />
       </div>
+
+      {/* ── Interact Prompt (center-bottom of screen) ── */}
+      {interactPrompt && (
+        <div className="absolute bottom-24 left-1/2 -translate-x-1/2">
+          <div className="px-4 py-1.5 rounded border border-yellow-500/60 bg-black/70 text-yellow-300 text-xs font-bold tracking-wide">
+            {interactPrompt}
+          </div>
+        </div>
+      )}
 
       {/* ── Bottom: Action Bar ── */}
       <div className="pointer-events-auto absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
@@ -108,7 +143,7 @@ export default function HUD() {
       <div className="absolute left-3 bottom-4 text-[10px] text-gray-600 leading-4">
         <div>WASD Move · Shift Sprint</div>
         <div>Space Attack · E Interact</div>
-        <div>Q/R Abilities · 1-4 Pet Skills</div>
+        <div>Q/R Abilities · Scroll Zoom</div>
       </div>
     </div>
   )

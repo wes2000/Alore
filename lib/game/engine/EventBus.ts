@@ -54,6 +54,20 @@ export interface Events {
   'quest:progress':       { questId: string; objective: string; current: number; required: number }
   'quest:completed':      { questId: string }
 
+  // Mob events
+  'mob:attack_player':    { mobId: string; damage: number }
+  'mob:died':             { mobId: string; x: number; y: number }
+
+  // Gathering events
+  'gather:start':         { nodeType: string; duration: number }
+  'gather:progress':      { progress: number }
+  'gather:complete':      { itemId: string; qty: number; nodeType: string; chunkKey: string; nodeId: string }
+  'gather:cancel':        {}
+
+  // Interaction prompt (drives HUD hint)
+  'interact:nearby':      { label: string }
+  'interact:clear':       {}
+
   // Save events
   'save:requested':       {}
   'save:completed':       {}

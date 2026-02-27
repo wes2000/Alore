@@ -20,6 +20,10 @@ interface GameStore {
   currentBiome: BiomeType | null
   fps:          number
 
+  // Interaction / gathering prompts
+  interactPrompt: string | null
+  gatherProgress: number | null   // 0–1 while gathering, null when idle
+
   // UI state
   activePanel: 'skills' | 'pets' | 'inventory' | 'map' | null
   notifications: Notification[]
@@ -31,6 +35,8 @@ interface GameStore {
   setPlayerPos:   (x: number, y: number) => void
   setBiome:       (biome: BiomeType) => void
   setFPS:         (fps: number) => void
+  setInteractPrompt: (label: string | null) => void
+  setGatherProgress: (progress: number | null) => void
   setPanel:       (panel: GameStore['activePanel']) => void
   togglePanel:    (panel: 'skills' | 'pets' | 'inventory' | 'map') => void
   addNotification:(message: string, type: Notification['type']) => void
@@ -48,15 +54,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
   playerY:        0,
   currentBiome:   null,
   fps:            0,
+  interactPrompt: null,
+  gatherProgress: null,
   activePanel:    null,
   notifications:  [],
 
-  setPlayerHP:     (hp, max)      => set({ playerHP: hp, playerMaxHP: max }),
-  setPlayerEnergy: (energy, max)  => set({ playerEnergy: energy, playerMaxEnergy: max }),
-  setPlayerGold:   (gold)         => set({ playerGold: gold }),
-  setPlayerPos:    (x, y)         => set({ playerX: x, playerY: y }),
-  setBiome:        (biome)        => set({ currentBiome: biome }),
-  setFPS:          (fps)          => set({ fps }),
+  setPlayerHP:       (hp, max)    => set({ playerHP: hp, playerMaxHP: max }),
+  setPlayerEnergy:   (energy, max)=> set({ playerEnergy: energy, playerMaxEnergy: max }),
+  setPlayerGold:     (gold)       => set({ playerGold: gold }),
+  setPlayerPos:      (x, y)       => set({ playerX: x, playerY: y }),
+  setBiome:          (biome)      => set({ currentBiome: biome }),
+  setFPS:            (fps)        => set({ fps }),
+  setInteractPrompt: (label)      => set({ interactPrompt: label }),
+  setGatherProgress: (progress)   => set({ gatherProgress: progress }),
 
   setPanel: (panel) => set({ activePanel: panel }),
   togglePanel: (panel) => set(s => ({

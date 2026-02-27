@@ -395,3 +395,25 @@ export interface DungeonCorridor {
   x2: number
   y2: number
 }
+
+export interface MobInstance {
+  id: string
+  mobId: string        // matches BIOME_DEFINITIONS mobSpawnTable entry
+  petDefId: string     // '' if not tameable
+  x: number
+  y: number
+  hp: number
+  maxHp: number
+  level: number
+  element: Element
+  chunkKey: string
+  state: 'wander' | 'chase' | 'dead'
+  wanderTargetX: number
+  wanderTargetY: number
+  wanderTimer: number
+  attackCooldown: number  // seconds until next mob attack
+  spd: number             // tiles per second
+  atk: number             // base damage per attack
+  def: number             // damage reduction
+  tameable: boolean
+}

@@ -19,6 +19,10 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
   ])
 }
 
+const ZOOM_MIN = 0.25
+const ZOOM_MAX = 4.0
+const ZOOM_STEP = 0.15
+
 export default function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const engineRef = useRef<GameEngine | null>(null)
@@ -41,6 +45,11 @@ export default function GameCanvas() {
       eventBus.on('ui:notification',       ({ message, type }) => store.addNotification(message, type)),
       eventBus.on('ui:panel_open',         ({ panel })        => store.setPanel(panel as 'skills' | 'pets' | 'inventory' | 'map')),
       eventBus.on('ui:panel_close',        ()                 => store.setPanel(null)),
+      eventBus.on('interact:nearby',       ({ label })        => store.setInteractPrompt(label)),
+      eventBus.on('interact:clear',        ()                 => store.setInteractPrompt(null)),
+      eventBus.on('gather:progress',       ({ progress })     => store.setGatherProgress(progress)),
+      eventBus.on('gather:complete',       ()                 => store.setGatherProgress(null)),
+      eventBus.on('gather:cancel',         ()                 => store.setGatherProgress(null)),
       eventBus.on('save:requested', async () => {
         const engine = engineRef.current
         if (!engine) return
@@ -72,17 +81,36 @@ export default function GameCanvas() {
       if (e.code === 'Equal' || e.code === 'NumpadAdd') {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const zoom = (engineRef.current as any)?.sceneRenderer?.currentZoom ?? 1
-        engineRef.current?.setZoom(zoom + 0.25)
+        engineRef.current?.setZoom(Math.min(ZOOM_MAX, zoom + 0.25))
       }
       if (e.code === 'Minus' || e.code === 'NumpadSubtract') {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const zoom = (engineRef.current as any)?.sceneRenderer?.currentZoom ?? 1
-        engineRef.current?.setZoom(zoom - 0.25)
+        engineRef.current?.setZoom(Math.max(ZOOM_MIN, zoom - 0.25))
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [store])
+
+  // Mouse-wheel zoom
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const engine = engineRef.current
+      if (!engine) return
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const current = (engine as any)?.sceneRenderer?.currentZoom ?? 1
+      const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP
+      engine.setZoom(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, current + delta)))
+    }
+
+    canvas.addEventListener('wheel', onWheel, { passive: false })
+    return () => canvas.removeEventListener('wheel', onWheel)
+  }, []) // runs once after mount; canvas ref is stable
 
   // Resize handler
   useEffect(() => {
@@ -157,7 +185,6 @@ export default function GameCanvas() {
 
       } catch (err) {
         console.error('Engine init error:', err)
-        // Never hang — show game even if something went wrong
         setLoadMsg('Starting...')
         setTimeout(() => {
           setLoading(false)
@@ -205,7 +232,7 @@ export default function GameCanvas() {
       {/* React UI — only mounted after engine is live */}
       {ready && (
         <>
-          <HUD />
+          <HUD engine={engineRef.current} />
           <SkillPanel engine={engineRef.current} />
           <PetPanel engine={engineRef.current} onUpdate={triggerUpdate} />
           <InventoryPanel engine={engineRef.current} />
