@@ -381,9 +381,25 @@ export class GameEngine {
 
     const p = this.playerState
     const mob = this.mobSpawner.getMobAt(p.x + 0.5, p.y + 0.5, PLAYER_ATTACK_RANGE)
-    if (!mob) return
 
     this.playerAttackCooldown = PLAYER_ATTACK_COOLDOWN
+
+    // Slash effect: on mob → at mob, otherwise in front of player
+    if (mob) {
+      this.entityRenderer.spawnAttackEffect(mob.x + 0.5, mob.y + 0.5)
+    } else {
+      const dirOffsets: Record<string, { x: number; y: number }> = {
+        right: { x: 1, y: 0 }, left: { x: -1, y: 0 },
+        down:  { x: 0, y: 1 }, up:   { x: 0,  y: -1 },
+      }
+      const off = dirOffsets[this.playerDir] ?? { x: 0, y: 1 }
+      this.entityRenderer.spawnAttackEffect(
+        p.x + 0.5 + off.x * PLAYER_ATTACK_RANGE * 0.6,
+        p.y + 0.5 + off.y * PLAYER_ATTACK_RANGE * 0.6,
+      )
+      return
+    }
+
     const meleeLvl = this.skillSystem.getSkillLevel(SkillType.Melee)
     const damage = Math.max(1, PLAYER_ATTACK_BASE_DMG + (meleeLvl - 1) * 2 - mob.def)
 

@@ -19,7 +19,7 @@ const SHADOW = '#706040'
 const panel: React.CSSProperties = {
   background: CREAM,
   border: `3px solid ${BLACK}`,
-  boxShadow: `4px 4px 0 ${BLACK}`,
+  boxShadow: `3px 3px 0 ${BLACK}`,
   color: BLACK,
   fontFamily: "'Press Start 2P', monospace",
   imageRendering: 'pixelated',
@@ -41,36 +41,35 @@ export default function HUD({ engine }: HUDProps) {
   const hpPct     = Math.max(0, playerHP / Math.max(1, playerMaxHP))
   const energyPct = Math.max(0, playerEnergy / Math.max(1, playerMaxEnergy))
   const biomeName = currentBiome ? (BIOME_DEFINITIONS[currentBiome]?.name ?? currentBiome) : '---'
-
-  const hpColor = hpPct > 0.5 ? GREEN : hpPct > 0.25 ? YELLOW : RED
+  const hpColor   = hpPct > 0.5 ? GREEN : hpPct > 0.25 ? YELLOW : RED
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none">
 
       {/* ── Top-left: Vitals ── */}
-      <div className="pointer-events-auto absolute left-3 top-3 flex flex-col gap-2" style={{ width: 210 }}>
-        <div style={{ ...panel, padding: '10px 12px' }}>
+      <div className="absolute left-2 top-2 flex flex-col gap-1.5" style={{ width: 178 }}>
+        <div style={{ ...panel, padding: '7px 9px' }}>
 
           {/* HP row */}
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 7, marginBottom: 5 }}>
-              <span style={{ color: RED, letterSpacing: 1 }}>HP</span>
-              <span style={{ fontSize: 6, color: SHADOW }}>{playerHP}/{playerMaxHP}</span>
+          <div style={{ marginBottom: 7 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 6, marginBottom: 4 }}>
+              <span style={{ color: RED }}>HP</span>
+              <span style={{ fontSize: 5, color: SHADOW }}>{playerHP}/{playerMaxHP}</span>
             </div>
             <SegBar pct={hpPct} color={hpColor} />
           </div>
 
           {/* Energy row */}
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 7, marginBottom: 5 }}>
-              <span style={{ color: BLUE, letterSpacing: 1 }}>EN</span>
-              <span style={{ fontSize: 6, color: SHADOW }}>{Math.floor(playerEnergy)}/{playerMaxEnergy}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 6, marginBottom: 4 }}>
+              <span style={{ color: BLUE }}>EN</span>
+              <span style={{ fontSize: 5, color: SHADOW }}>{Math.floor(playerEnergy)}/{playerMaxEnergy}</span>
             </div>
             <SegBar pct={energyPct} color={BLUE} />
           </div>
 
           {/* Stats row */}
-          <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 6 }}>
+          <div style={{ display: 'flex', gap: 10, marginTop: 6, fontSize: 5 }}>
             <span>ATK <span style={{ color: YELLOW }}>{playerATK}</span></span>
             <span>DEF <span style={{ color: BLUE }}>{playerDEF}</span></span>
           </div>
@@ -78,22 +77,21 @@ export default function HUD({ engine }: HUDProps) {
 
         {/* Gather progress */}
         {gatherProgress !== null && (
-          <div style={{ ...panel, padding: '8px 12px' }}>
-            <div style={{ fontSize: 6, marginBottom: 5, color: GOLD }}>GATHERING...</div>
+          <div style={{ ...panel, padding: '6px 9px' }}>
+            <div style={{ fontSize: 5, marginBottom: 4, color: GOLD }}>GATHERING...</div>
             <SegBar pct={gatherProgress} color={GOLD} />
           </div>
         )}
       </div>
 
       {/* ── Top-right: Info + Minimap ── */}
-      <div className="absolute right-3 top-3 flex flex-col items-end gap-2">
-        <div style={{ ...panel, padding: '8px 10px', textAlign: 'right', lineHeight: '18px' }}>
-          <div style={{ fontSize: 8, color: GOLD }}>{playerGold.toLocaleString()} G</div>
-          <div style={{ fontSize: 6, marginTop: 4 }}>{biomeName.toUpperCase()}</div>
-          <div style={{ fontSize: 5, marginTop: 3, color: SHADOW }}>{fps} FPS</div>
+      <div className="absolute right-2 top-2 flex flex-col items-end gap-1.5">
+        <div style={{ ...panel, padding: '6px 8px', textAlign: 'right', lineHeight: '15px' }}>
+          <div style={{ fontSize: 7, color: GOLD }}>{playerGold.toLocaleString()} G</div>
+          <div style={{ fontSize: 5, marginTop: 3 }}>{biomeName.toUpperCase()}</div>
+          <div style={{ fontSize: 4, marginTop: 2, color: SHADOW }}>{fps} FPS</div>
         </div>
-        {/* Minimap wrapped in Pokémon border */}
-        <div style={{ border: `3px solid ${BLACK}`, boxShadow: `4px 4px 0 ${BLACK}`, lineHeight: 0 }}>
+        <div style={{ border: `3px solid ${BLACK}`, boxShadow: `3px 3px 0 ${BLACK}`, lineHeight: 0 }}>
           <Minimap engine={engine} />
         </div>
       </div>
@@ -101,20 +99,26 @@ export default function HUD({ engine }: HUDProps) {
       {/* ── Interact Prompt ── */}
       {interactPrompt && (
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2">
-          <div style={{ ...panel, padding: '8px 14px', fontSize: 7 }}>
+          <div style={{ ...panel, padding: '6px 12px', fontSize: 6 }}>
             ▶ {interactPrompt}
           </div>
         </div>
       )}
 
-      {/* ── Bottom: Action Bar (battle menu) ── */}
-      <div className="pointer-events-auto absolute bottom-4 left-1/2 -translate-x-1/2">
-        <div style={{ ...panel, padding: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, overflow: 'hidden' }}>
+      {/* ── Bottom: Action Bar (2×2 battle menu) ── */}
+      <div className="pointer-events-auto absolute bottom-3 left-1/2 -translate-x-1/2">
+        <div style={{
+          ...panel,
+          padding: 0,
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          overflow: 'hidden',
+        }}>
           {[
-            { label: 'SKILLS',  panel: 'skills',    hotkey: 'L' },
-            { label: 'PETS',    panel: 'pets',      hotkey: 'P' },
-            { label: 'ITEMS',   panel: 'inventory', hotkey: 'TAB' },
-            { label: 'MAP',     panel: 'map',       hotkey: 'M' },
+            { label: 'SKILLS', panel: 'skills',    hotkey: 'L' },
+            { label: 'PETS',   panel: 'pets',      hotkey: 'P' },
+            { label: 'ITEMS',  panel: 'inventory', hotkey: 'TAB' },
+            { label: 'MAP',    panel: 'map',       hotkey: 'M' },
           ].map(({ label, panel: p, hotkey }) => {
             const isActive = activePanel === p
             return (
@@ -122,8 +126,8 @@ export default function HUD({ engine }: HUDProps) {
                 key={p}
                 onClick={() => togglePanel(p as 'skills' | 'pets' | 'inventory' | 'map')}
                 style={{
-                  padding: '9px 14px',
-                  fontSize: 7,
+                  padding: '7px 11px',
+                  fontSize: 6,
                   fontFamily: "'Press Start 2P', monospace",
                   background: isActive ? BLACK : CREAM,
                   color: isActive ? CREAM : BLACK,
@@ -132,12 +136,13 @@ export default function HUD({ engine }: HUDProps) {
                   textAlign: 'left',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 6,
+                  gap: 5,
                   transition: 'none',
                   userSelect: 'none',
+                  lineHeight: 1,
                 }}
               >
-                <span style={{ color: isActive ? CREAM : RED }}>{isActive ? '▶' : ' '}</span>
+                <span style={{ color: isActive ? CREAM : RED, width: 6 }}>{isActive ? '▶' : ''}</span>
                 {label}
               </button>
             )
@@ -145,18 +150,18 @@ export default function HUD({ engine }: HUDProps) {
         </div>
       </div>
 
-      {/* ── Notifications (dialog box style) ── */}
-      <div className="absolute right-3 bottom-20 flex flex-col gap-2 items-end" style={{ maxWidth: 230 }}>
+      {/* ── Notifications ── */}
+      <div className="absolute right-2 bottom-20 flex flex-col gap-1.5 items-end" style={{ maxWidth: 200 }}>
         {notifications.map(n => (
           <div
             key={n.id}
             className="animate-fade-in"
             style={{
               ...panel,
-              padding: '8px 12px',
-              fontSize: 7,
-              lineHeight: '16px',
-              borderLeft: `6px solid ${notifAccent(n.type)}`,
+              padding: '6px 10px',
+              fontSize: 6,
+              lineHeight: '13px',
+              borderLeft: `5px solid ${notifAccent(n.type)}`,
             }}
           >
             {n.message}
@@ -166,8 +171,8 @@ export default function HUD({ engine }: HUDProps) {
 
       {/* ── Controls hint (desktop only) ── */}
       <div
-        className="absolute left-3 bottom-4 hidden md:block"
-        style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 5, color: '#707070', lineHeight: '11px' }}
+        className="absolute left-2 bottom-3 hidden md:block"
+        style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 4, color: '#808080', lineHeight: '10px' }}
       >
         <div>WASD MOVE  SHIFT SPRINT</div>
         <div>SPACE ATK  E INTERACT</div>
@@ -177,12 +182,12 @@ export default function HUD({ engine }: HUDProps) {
   )
 }
 
-// ── Segmented HP/EN bar (like Pokémon's health segments) ─────────────────────
+// ── 16-segment bar (Pokémon style) ───────────────────────────────────────────
 function SegBar({ pct, color }: { pct: number; color: string }) {
-  const SEG = 18
+  const SEG = 16
   const filled = Math.round(pct * SEG)
   return (
-    <div style={{ display: 'flex', gap: 1.5, height: 7 }}>
+    <div style={{ display: 'flex', gap: 1, height: 5 }}>
       {Array.from({ length: SEG }, (_, i) => (
         <div
           key={i}

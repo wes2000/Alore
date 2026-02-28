@@ -262,27 +262,17 @@ export class ChunkRenderer {
     }
     ctx.globalAlpha = 1
 
-    // Resource node markers baked directly into the tile texture
-    const margin = Math.max(1, Math.round(CANVAS_TILE_PX * 0.18))
-    const size   = CANVAS_TILE_PX - margin * 2
+    // Resource node pixel-art sprites baked directly into the tile texture
     for (const node of chunk.resourceNodes) {
       if (node.depleted) continue
       const px = node.localX * CANVAS_TILE_PX
       const py = node.localY * CANVAS_TILE_PX
-      ctx.fillStyle = numToHex(getNodeColor(node.type))
-      ctx.fillRect(px + margin, py + margin, size, size)
-      ctx.strokeStyle = 'rgba(0,0,0,0.45)'
-      ctx.lineWidth = 1
-      ctx.strokeRect(px + margin + 0.5, py + margin + 0.5, size - 1, size - 1)
+      drawNodePixelArt(ctx, px, py, node.type)
     }
   }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function numToHex(n: number): string {
-  return '#' + n.toString(16).padStart(6, '0')
-}
 
 function varyColor(base: number, vary: number): string {
   const r = (base >> 16) & 0xff
@@ -296,19 +286,182 @@ function clamp(v: number): number {
   return v < 0 ? 0 : v > 255 ? 255 : Math.round(v)
 }
 
-function getNodeColor(nodeType: string): number {
-  const nodeColors: Record<string, number> = {
-    CopperOre:       0xc87040,
-    IronOre:         0x808090,
-    GoldOre:         0xf0c040,
-    MithrilOre:      0x4080e0,
-    OakTree:         0x2a5a1a,
-    BirchTree:       0xd4c8a0,
-    WillowTree:      0x487840,
-    HerbPatch:       0x60c840,
-    MushroomCluster: 0x8a5020,
-    FishingSpot:     0x40b0ff,
-    StoneBoulder:    0x888888,
+// ─── Pixel-art resource node sprites ─────────────────────────────────────────
+// Each pattern is 8 chars wide × 8 chars tall (one canvas pixel each).
+// '.' = skip (transparent). Each letter maps to a hex color in the palette.
+// At CANVAS_TILE_PX=8 these pixels are 4× upscaled to 32px display tiles.
+
+type Palette = Record<string, string>
+
+const NODE_ART: Record<string, { p: string[]; pal: Palette }> = {
+  OakTree: {
+    p: [
+      '...dGGd.',
+      '..dGlGGd',
+      '.dGGGGGd',
+      'dGGGGGGd',
+      '.dGGGGd.',
+      '...BB...',
+      '...BB...',
+      '........',
+    ],
+    pal: { d: '#1a3a08', G: '#3a7a18', l: '#5aaa28', B: '#7a4a20' },
+  },
+  BirchTree: {
+    p: [
+      '...dLLd.',
+      '..dLlLLd',
+      '.dLLLLLd',
+      'dLLLLLLd',
+      '.dLLLLd.',
+      '...Ww...',
+      '...wW...',
+      '........',
+    ],
+    pal: { d: '#2a5010', L: '#6a9a30', l: '#8aca40', W: '#e8e0c0', w: '#c8b890' },
+  },
+  WillowTree: {
+    p: [
+      '...dWWd.',
+      '..dWwWWd',
+      '.dWWWWWd',
+      'dWWWWWWd',
+      '.dWWWWd.',
+      '...Bb...',
+      '...Bb...',
+      '........',
+    ],
+    pal: { d: '#1a3830', W: '#407840', w: '#60a860', B: '#604820', b: '#402a10' },
+  },
+  StoneBoulder: {
+    p: [
+      '..dDDd..',
+      '.dLLLDd.',
+      'dLlLLLDd',
+      'dLLLLLDd',
+      '.dLLLDd.',
+      '..dDDd..',
+      '........',
+      '........',
+    ],
+    pal: { d: '#505050', D: '#383838', L: '#909090', l: '#b0b0b0' },
+  },
+  CopperOre: {
+    p: [
+      '..dDDd..',
+      '.dLLLDd.',
+      'dLooCLDd',
+      'dLoCoCDd',
+      '.dLLLDd.',
+      '..dDDd..',
+      '........',
+      '........',
+    ],
+    pal: { d: '#505058', D: '#383840', L: '#808090', l: '#9090a0', o: '#e09060', C: '#a86030' },
+  },
+  IronOre: {
+    p: [
+      '..dDDd..',
+      '.dddDDd.',
+      'ddiiiDDd',
+      'ddiiIDd.',
+      '.dddDd..',
+      '..dDd...',
+      '........',
+      '........',
+    ],
+    pal: { d: '#505058', D: '#303038', i: '#8090a0', I: '#a0b0c0' },
+  },
+  GoldOre: {
+    p: [
+      '..dDDd..',
+      '.dLLLDd.',
+      'dLGGGLDd',
+      'dLGgGLDd',
+      '.dLGLDd.',
+      '..dDDd..',
+      '........',
+      '........',
+    ],
+    pal: { d: '#504840', D: '#383028', L: '#888070', G: '#e8c020', g: '#f8e040' },
+  },
+  MithrilOre: {
+    p: [
+      '..dDDd..',
+      '.dLLLDd.',
+      'dLMMMlDd',
+      'dLMmMlDd',
+      '.dLMLDd.',
+      '..dDDd..',
+      '........',
+      '........',
+    ],
+    pal: { d: '#384050', D: '#202830', L: '#607080', l: '#708090', M: '#5090e0', m: '#80b8f8' },
+  },
+  HerbPatch: {
+    p: [
+      '.f.f.f..',
+      'S.S.S...',
+      'SSSSSSS.',
+      '.sSSSss.',
+      '..sssss.',
+      '........',
+      '........',
+      '........',
+    ],
+    pal: { f: '#e8d020', S: '#60c840', s: '#308020' },
+  },
+  MushroomCluster: {
+    p: [
+      '.DRRRD..',
+      'DRRRRRd.',
+      'RWwWRRd.',
+      'RRRRRd..',
+      '.DSSSD..',
+      '..SSS...',
+      '........',
+      '........',
+    ],
+    pal: { D: '#601010', R: '#d82020', d: '#401010', W: '#f0f0f0', w: '#d0c8c0', S: '#e8e8d0' },
+  },
+  FishingSpot: {
+    p: [
+      '........',
+      '.wWww...',
+      'bwwwwwb.',
+      'bWwwwwb.',
+      '.wWwww..',
+      '..wWw...',
+      '........',
+      '........',
+    ],
+    pal: { b: '#2060a0', w: '#60b8e0', W: '#c0e8ff' },
+  },
+}
+
+function drawNodePixelArt(
+  ctx: CanvasRenderingContext2D,
+  px: number,
+  py: number,
+  nodeType: string,
+): void {
+  const art = NODE_ART[nodeType]
+  if (!art) {
+    // Fallback: small colored square for unknown node types
+    ctx.fillStyle = '#888888'
+    const m = 1
+    ctx.fillRect(px + m, py + m, CANVAS_TILE_PX - m * 2, CANVAS_TILE_PX - m * 2)
+    return
   }
-  return nodeColors[nodeType] ?? 0x888888
+  const { p, pal } = art
+  for (let row = 0; row < p.length; row++) {
+    const rowStr = p[row]
+    for (let col = 0; col < rowStr.length; col++) {
+      const ch = rowStr[col]
+      if (ch !== '.') {
+        ctx.fillStyle = pal[ch]
+        ctx.fillRect(px + col, py + row, 1, 1)
+      }
+    }
+  }
 }

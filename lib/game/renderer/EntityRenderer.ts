@@ -158,9 +158,74 @@ export class EntityRenderer {
     }, durationMs)
   }
 
+  /**
+   * Spawn a pixel-art slash/impact effect at world position (wx, wy).
+   * The effect expands and fades over ~280ms then removes itself.
+   */
+  spawnAttackEffect(wx: number, wy: number): void {
+    const texture = buildSlashTexture()
+    const geo = new THREE.PlaneGeometry(1.6, 1.6)
+    const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false })
+    const mesh = new THREE.Mesh(geo, mat)
+    mesh.position.set(wx, -wy, 0.7)
+
+    this.scene.add(mesh)
+
+    const DURATION = 280
+    const start = performance.now()
+
+    const tick = () => {
+      const t = Math.min((performance.now() - start) / DURATION, 1)
+      mat.opacity = 1 - t
+      const s = 0.5 + t * 1.2
+      mesh.scale.set(s, s, 1)
+      if (t < 1) {
+        requestAnimationFrame(tick)
+      } else {
+        this.scene.remove(mesh)
+        geo.dispose()
+        mat.dispose()
+        texture.dispose()
+      }
+    }
+    requestAnimationFrame(tick)
+  }
+
   dispose(): void {
     for (const id of this.entities.keys()) this.removeEntity(id)
   }
+}
+
+// ─── Attack effect ────────────────────────────────────────────────────────────
+
+/** Build a 16×16 pixel-art cross/impact texture for the attack slash effect. */
+function buildSlashTexture(): THREE.CanvasTexture {
+  const SIZE = 16
+  const canvas = document.createElement('canvas')
+  canvas.width  = SIZE
+  canvas.height = SIZE
+  const ctx = canvas.getContext('2d')!
+
+  // White cross (+ shape)
+  ctx.fillStyle = '#FFFFFF'
+  ctx.fillRect(0, 7, SIZE, 2)   // horizontal bar
+  ctx.fillRect(7, 0, 2, SIZE)   // vertical bar
+
+  // Yellow tips at arm ends
+  ctx.fillStyle = '#FFEE44'
+  ctx.fillRect(0,  7, 2, 2)    // left tip
+  ctx.fillRect(14, 7, 2, 2)    // right tip
+  ctx.fillRect(7,  0, 2, 2)    // top tip
+  ctx.fillRect(7, 14, 2, 2)    // bottom tip
+
+  // Bright center
+  ctx.fillStyle = '#FFFFAA'
+  ctx.fillRect(7, 7, 2, 2)
+
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.magFilter = THREE.NearestFilter
+  tex.minFilter = THREE.NearestFilter
+  return tex
 }
 
 // ─── Label helpers ────────────────────────────────────────────────────────────
