@@ -146,8 +146,8 @@ export default function HUD({ engine }: HUDProps) {
         ))}
       </div>
 
-      {/* ── Controls hint (bottom-left) ── */}
-      <div className="absolute left-3 bottom-4 text-[10px] text-gray-600 leading-4">
+      {/* ── Controls hint (bottom-left, desktop only) ── */}
+      <div className="absolute left-3 bottom-4 text-[10px] text-gray-600 leading-4 hidden md:block">
         <div>WASD Move · Shift Sprint</div>
         <div>Space Attack · E Interact</div>
         <div>Q/R Abilities · Scroll Zoom</div>

@@ -6,6 +6,7 @@ import { eventBus } from '@/lib/game/engine/EventBus'
 import { useGameStore } from '@/lib/store/gameStore'
 import { getOrCreatePlayerId, loadPlayer, loadPets, savePlayer, scheduleSave } from '@/lib/db/gameDB'
 import HUD from './HUD'
+import MobileControls from './MobileControls'
 import SkillPanel from './panels/SkillPanel'
 import PetPanel from './panels/PetPanel'
 import InventoryPanel from './panels/InventoryPanel'
@@ -247,6 +248,7 @@ export default function GameCanvas() {
       {ready && (
         <>
           <HUD engine={engineRef.current} />
+          <MobileControls engine={engineRef.current} />
           <SkillPanel engine={engineRef.current} />
           <PetPanel engine={engineRef.current} onUpdate={triggerUpdate} />
           <InventoryPanel engine={engineRef.current} />
