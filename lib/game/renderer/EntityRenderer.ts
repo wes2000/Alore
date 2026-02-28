@@ -19,7 +19,7 @@ interface SpeechBubble {
 }
 
 // Entity types for the renderer
-export type EntityKind = 'player' | 'pet' | 'mob'
+export type EntityKind = 'player' | 'pet' | 'mob' | 'npc'
 
 /** Colored quad renderer for entities with optional sprite support.
  *  Player entity uses a sprite sheet texture when SpriteManager is available.
@@ -315,7 +315,8 @@ function makeLabel(
   ctx.clearRect(0, 0, 128, 24)
 
   const color = kind === 'player' ? '#ffffff' :
-                kind === 'pet'    ? '#a0e8a0' : '#ff8080'
+                kind === 'pet'    ? '#a0e8a0' :
+                kind === 'npc'    ? '#FFD700' : '#ff8080'
 
   ctx.font = 'bold 11px monospace'
   ctx.textAlign = 'center'

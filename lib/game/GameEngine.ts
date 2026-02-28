@@ -25,6 +25,7 @@ import { ITEM_DEFINITIONS } from './data/items'
 import { XP_AWARDS } from './data/skills'
 import { ABILITIES } from './data/abilities'
 import { BIOME_DEFINITIONS, TILE_IMPASSABLE } from './data/biomes'
+import { SHOP_BUY_ITEMS, SHOP_NPC_X, SHOP_NPC_Y, SHOP_INTERACT_RANGE, SELL_RATIO } from './data/shop'
 
 const PLAYER_SPEED         = 5.0   // tiles per second
 const SPRINT_MULT          = 1.7
@@ -151,6 +152,14 @@ export class GameEngine {
       this.playerState.x, this.playerState.y,
       0x4488ff, 0x88bbff,
       this.playerState.name
+    )
+
+    // Add shopkeeper NPC near spawn
+    this.entityRenderer.addEntity(
+      'npc_shop', 'npc',
+      SHOP_NPC_X, SHOP_NPC_Y,
+      0xFFCC00, 0xFFEE88,
+      'Shop'
     )
 
     this.setupEventListeners()
@@ -381,7 +390,7 @@ export class GameEngine {
       if (this.tickCount % 3 === 0 && pet.activeAbilities.length > 0) {
         const petCx = targetX + 0.5
         const petCy = targetY + 0.5
-        const nearbyMob = this.mobSpawner.getMobAt(petCx, petCy, 5.0)
+        const nearbyMob = this.mobSpawner.getMobAt(petCx, petCy, 4.25)
         if (nearbyMob) {
           const cooldowns = this.petAbilityCooldowns.get(pet.instanceId) ?? {}
           for (const abilityId of pet.activeAbilities) {
@@ -471,6 +480,13 @@ export class GameEngine {
       return
     }
 
+    // Priority 0: open shop if near the shopkeeper NPC
+    const shopDist = Math.hypot(p.x + 0.5 - (SHOP_NPC_X + 0.5), p.y + 0.5 - (SHOP_NPC_Y + 0.5))
+    if (shopDist <= SHOP_INTERACT_RANGE) {
+      eventBus.emit('shop:open', {})
+      return
+    }
+
     // Priority 1: tame a weak nearby mob
     const tameTarget = this.mobSpawner.getTameableMobNearby(p.x + 0.5, p.y + 0.5, INTERACT_RANGE)
     if (tameTarget) {
@@ -502,6 +518,17 @@ export class GameEngine {
     }
 
     const p = this.playerState
+
+    // Check shopkeeper NPC
+    const shopDist = Math.hypot(p.x + 0.5 - (SHOP_NPC_X + 0.5), p.y + 0.5 - (SHOP_NPC_Y + 0.5))
+    if (shopDist <= SHOP_INTERACT_RANGE) {
+      const label = 'General Store [E]'
+      if (label !== this.lastInteractLabel) {
+        this.lastInteractLabel = label
+        eventBus.emit('interact:nearby', { label })
+      }
+      return
+    }
 
     const tameTarget = this.mobSpawner.getTameableMobNearby(p.x + 0.5, p.y + 0.5, INTERACT_RANGE)
     if (tameTarget) {
@@ -767,6 +794,45 @@ export class GameEngine {
     const p = this.playerState
     const chunk = this.chunkSystem.getChunkAt(Math.floor(p.x), Math.floor(p.y))
     return chunk.biome
+  }
+
+  // ─── Shop ─────────────────────────────────────────────────────────────────
+
+  /** Buy one unit of an item from the shop. Returns result for UI feedback. */
+  buyItem(itemId: string): { success: boolean; message: string } {
+    const listing = SHOP_BUY_ITEMS.find(i => i.id === itemId)
+    if (!listing) return { success: false, message: 'Item not available' }
+    if (this.playerState.gold < listing.price) return { success: false, message: 'Not enough gold!' }
+
+    this.playerState.gold -= listing.price
+    const def = ITEM_DEFINITIONS[itemId]
+    const existing = this.playerState.inventory.find(i => i.itemId === itemId)
+    if (existing && def?.stackable) {
+      existing.quantity += 1
+    } else {
+      this.playerState.inventory.push({
+        itemId,
+        quantity: 1,
+        slotIndex: this.playerState.inventory.length,
+      })
+    }
+    eventBus.emit('player:gold_changed', { total: this.playerState.gold })
+    return { success: true, message: `Bought ${def?.name ?? itemId}! -${listing.price}G` }
+  }
+
+  /** Sell all of an inventory slot back to the shop. Returns result for UI feedback. */
+  sellItem(slotIndex: number): { success: boolean; message: string } {
+    const idx = this.playerState.inventory.findIndex(i => i.slotIndex === slotIndex)
+    if (idx === -1) return { success: false, message: 'No item in slot' }
+    const slot = this.playerState.inventory[idx]
+    const def = ITEM_DEFINITIONS[slot.itemId]
+    if (!def) return { success: false, message: 'Unknown item' }
+
+    const earned = Math.max(1, Math.floor(def.value * SELL_RATIO)) * slot.quantity
+    this.playerState.gold += earned
+    this.playerState.inventory.splice(idx, 1)
+    eventBus.emit('player:gold_changed', { total: this.playerState.gold })
+    return { success: true, message: `Sold for +${earned}G` }
   }
 
   /** Derived combat/progression stats for the HUD. */
