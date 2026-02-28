@@ -68,6 +68,10 @@ export interface Events {
   'interact:nearby':      { label: string }
   'interact:clear':       {}
 
+  // Shop events
+  'shop:open':            {}
+  'shop:close':           {}
+
   // Save events
   'save:requested':       {}
   'save:completed':       {}

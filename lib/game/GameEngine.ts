@@ -816,7 +816,7 @@ export class GameEngine {
         slotIndex: this.playerState.inventory.length,
       })
     }
-    eventBus.emit('player:gold_changed', { total: this.playerState.gold })
+    eventBus.emit('player:gold_changed', { amount: 0, total: this.playerState.gold })
     return { success: true, message: `Bought ${def?.name ?? itemId}! -${listing.price}G` }
   }
 
@@ -831,7 +831,7 @@ export class GameEngine {
     const earned = Math.max(1, Math.floor(def.value * SELL_RATIO)) * slot.quantity
     this.playerState.gold += earned
     this.playerState.inventory.splice(idx, 1)
-    eventBus.emit('player:gold_changed', { total: this.playerState.gold })
+    eventBus.emit('player:gold_changed', { amount: 0, total: this.playerState.gold })
     return { success: true, message: `Sold for +${earned}G` }
   }
 
