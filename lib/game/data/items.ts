@@ -1,4 +1,4 @@
-import { ItemDefinition, ItemRarity, ItemType, SkillType } from './types'
+import { ItemDefinition, ItemRarity, ItemType, SkillType, Element } from './types'
 
 export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   // ─── Raw Resources ────────────────────────────────────────────────────────
@@ -53,13 +53,25 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   // ─── Evolution Items ──────────────────────────────────────────────────────
   fire_shard:   { id: 'fire_shard',   name: 'Fire Shard',   description: 'A crystallised ember. Required to evolve Emberkit.', type: ItemType.KeyItem, rarity: ItemRarity.Rare, stackable: false, maxStack: 1, value: 0, icon: '🔥' },
 
+  // ─── Processed Resources ──────────────────────────────────────────────────
+  cooked_shrimp:{ id: 'cooked_shrimp',name: 'Cooked Shrimp',description: 'Restores 30 HP.',        type: ItemType.Consumable, rarity: ItemRarity.Common, stackable: true, maxStack: 100, value: 8,   icon: '🍤', healAmount: 30 },
+  cooked_fish:  { id: 'cooked_fish',  name: 'Cooked Fish',  description: 'Restores 60 HP.',        type: ItemType.Consumable, rarity: ItemRarity.Common, stackable: true, maxStack: 100, value: 15,  icon: '🍖', healAmount: 60 },
+  coal:         { id: 'coal',         name: 'Coal',         description: 'Fuel for the forge.',     type: ItemType.Resource, rarity: ItemRarity.Common,   stackable: true, maxStack: 200, value: 8,   icon: '⬛' },
+  crossbow_bolt:{ id: 'crossbow_bolt',name: 'Crossbow Bolt',description: 'Iron-tipped bolt.',      type: ItemType.Resource, rarity: ItemRarity.Common,   stackable: true, maxStack: 500, value: 5,   icon: '🔩' },
+
   // ─── Equipment ────────────────────────────────────────────────────────────
-  bronze_sword: { id: 'bronze_sword', name: 'Bronze Sword', description: 'A simple bronze blade.', type: ItemType.Weapon, rarity: ItemRarity.Common, stackable: false, maxStack: 1, value: 35, icon: '⚔️', statBonus: { atk: 8 } },
-  iron_sword:   { id: 'iron_sword',   name: 'Iron Sword',   description: 'Reliable iron sword.',   type: ItemType.Weapon, rarity: ItemRarity.Common, stackable: false, maxStack: 1, value: 90, icon: '⚔️', statBonus: { atk: 18 }, skillReq: { skill: SkillType.Melee, level: 10 } },
-  steel_sword:  { id: 'steel_sword',  name: 'Steel Sword',  description: 'A keen steel blade.',    type: ItemType.Weapon, rarity: ItemRarity.Uncommon, stackable: false, maxStack: 1, value: 250, icon: '⚔️', statBonus: { atk: 34 }, skillReq: { skill: SkillType.Melee, level: 20 } },
-  oak_staff:    { id: 'oak_staff',    name: 'Oak Staff',    description: 'A basic magic staff.',   type: ItemType.Weapon, rarity: ItemRarity.Common, stackable: false, maxStack: 1, value: 60, icon: '🪄', statBonus: { matk: 12 } },
-  iron_shield:  { id: 'iron_shield',  name: 'Iron Shield',  description: 'Solid iron protection.', type: ItemType.Armor, rarity: ItemRarity.Common, stackable: false, maxStack: 1, value: 75, icon: '🛡️', statBonus: { def: 14 }, skillReq: { skill: SkillType.Defense, level: 10 } },
-  leather_chaps:{ id: 'leather_chaps',name: 'Leather Armor',description: 'Light leather outfit.', type: ItemType.Armor, rarity: ItemRarity.Common, stackable: false, maxStack: 1, value: 45, icon: '👕', statBonus: { def: 6, mdef: 4 } },
+  bronze_sword: { id: 'bronze_sword', name: 'Bronze Sword', description: 'A simple bronze blade.', type: ItemType.Weapon, rarity: ItemRarity.Common, stackable: false, maxStack: 1, value: 35, icon: '⚔️', statBonus: { atk: 8 }, weaponStyle: 'melee', equipSlot: 'weapon' },
+  iron_sword:   { id: 'iron_sword',   name: 'Iron Sword',   description: 'Reliable iron sword.',   type: ItemType.Weapon, rarity: ItemRarity.Common, stackable: false, maxStack: 1, value: 90, icon: '⚔️', statBonus: { atk: 18 }, skillReq: { skill: SkillType.Melee, level: 10 }, weaponStyle: 'melee', equipSlot: 'weapon' },
+  steel_sword:  { id: 'steel_sword',  name: 'Steel Sword',  description: 'A keen steel blade.',    type: ItemType.Weapon, rarity: ItemRarity.Uncommon, stackable: false, maxStack: 1, value: 250, icon: '⚔️', statBonus: { atk: 34 }, skillReq: { skill: SkillType.Melee, level: 20 }, weaponStyle: 'melee', equipSlot: 'weapon' },
+  oak_staff:    { id: 'oak_staff',    name: 'Oak Staff',    description: 'A basic magic staff.',   type: ItemType.Weapon, rarity: ItemRarity.Common, stackable: false, maxStack: 1, value: 60, icon: '🪄', statBonus: { matk: 12 }, weaponStyle: 'staff', equipSlot: 'weapon', element: Element.Arcane },
+  willow_staff: { id: 'willow_staff', name: 'Willow Staff',  description: 'A flexible magic staff.', type: ItemType.Weapon, rarity: ItemRarity.Uncommon, stackable: false, maxStack: 1, value: 150, icon: '🪄', statBonus: { matk: 22 }, skillReq: { skill: SkillType.Magic, level: 15 }, weaponStyle: 'staff', equipSlot: 'weapon', element: Element.Water },
+  fire_staff:   { id: 'fire_staff',   name: 'Fire Staff',   description: 'Burns with inner flame.', type: ItemType.Weapon, rarity: ItemRarity.Uncommon, stackable: false, maxStack: 1, value: 180, icon: '🪄', statBonus: { matk: 26 }, skillReq: { skill: SkillType.Magic, level: 20 }, weaponStyle: 'staff', equipSlot: 'weapon', element: Element.Fire },
+  short_bow:    { id: 'short_bow',    name: 'Short Bow',    description: 'A compact ranged weapon.',type: ItemType.Weapon, rarity: ItemRarity.Common, stackable: false, maxStack: 1, value: 50, icon: '🏹', statBonus: { atk: 10 }, weaponStyle: 'bow', equipSlot: 'weapon', atkRange: 6 },
+  crossbow:     { id: 'crossbow',     name: 'Crossbow',     description: 'Heavy but powerful.',     type: ItemType.Weapon, rarity: ItemRarity.Uncommon, stackable: false, maxStack: 1, value: 180, icon: '🏹', statBonus: { atk: 22 }, skillReq: { skill: SkillType.Ranged, level: 20 }, weaponStyle: 'bow', equipSlot: 'weapon', atkRange: 8 },
+  iron_shield:  { id: 'iron_shield',  name: 'Iron Shield',  description: 'Solid iron protection.', type: ItemType.Armor, rarity: ItemRarity.Common, stackable: false, maxStack: 1, value: 75, icon: '🛡️', statBonus: { def: 14 }, skillReq: { skill: SkillType.Defense, level: 10 }, equipSlot: 'offhand' },
+  leather_chaps:{ id: 'leather_chaps',name: 'Leather Armor',description: 'Light leather outfit.', type: ItemType.Armor, rarity: ItemRarity.Common, stackable: false, maxStack: 1, value: 45, icon: '👕', statBonus: { def: 6, mdef: 4 }, equipSlot: 'body' },
+  iron_chainmail:{ id: 'iron_chainmail', name: 'Iron Chainmail', description: 'Sturdy chain armor.', type: ItemType.Armor, rarity: ItemRarity.Common, stackable: false, maxStack: 1, value: 120, icon: '🦺', statBonus: { def: 12, mdef: 6 }, skillReq: { skill: SkillType.Defense, level: 15 }, equipSlot: 'body' },
+  steel_platebody:{ id: 'steel_platebody', name: 'Steel Plate', description: 'Heavy steel protection.', type: ItemType.Armor, rarity: ItemRarity.Uncommon, stackable: false, maxStack: 1, value: 300, icon: '🦺', statBonus: { def: 22, mdef: 8 }, skillReq: { skill: SkillType.Defense, level: 25 }, equipSlot: 'body' },
 
   // ─── Ability Scrolls ─────────────────────────────────────────────────────
   scroll_ember_toss:  { id: 'scroll_ember_toss',  name: 'Scroll: Ember Toss',   description: 'Teaches Ember Toss to a compatible pet.', type: ItemType.AbilityScroll, rarity: ItemRarity.Uncommon, stackable: false, maxStack: 1, value: 300, icon: '📜' },

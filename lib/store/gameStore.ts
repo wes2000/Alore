@@ -8,6 +8,8 @@ interface Notification {
   expiresAt: number
 }
 
+type PanelName = 'skills' | 'pets' | 'inventory' | 'map' | 'crafting' | 'quests'
+
 interface GameStore {
   // Player mirrors (updated from engine for React UI)
   playerHP:     number
@@ -30,9 +32,17 @@ interface GameStore {
   gatherNodeType: string | null   // e.g. "OakTree", shown during gathering
 
   // UI state
-  activePanel: 'skills' | 'pets' | 'inventory' | 'map' | null
+  activePanel: PanelName | null
   notifications: Notification[]
   shopOpen: boolean
+
+  // New M1–M4 state
+  inDungeon: boolean
+  dungeonTier: number
+  combatStyle: 'melee' | 'ranged' | 'magic'
+  activeSpellName: string | null
+  playerStatusEffects: string[]
+  activeQuestCount: number
 
   // Actions
   setPlayerHP:    (hp: number, max: number) => void
@@ -46,8 +56,13 @@ interface GameStore {
   setGatherProgress: (progress: number | null) => void
   setGatherNodeType: (nodeType: string | null) => void
   setPanel:       (panel: GameStore['activePanel']) => void
-  togglePanel:    (panel: 'skills' | 'pets' | 'inventory' | 'map') => void
+  togglePanel:    (panel: PanelName) => void
   setShopOpen:    (open: boolean) => void
+  setInDungeon:   (inDungeon: boolean, tier?: number) => void
+  setCombatStyle: (style: 'melee' | 'ranged' | 'magic') => void
+  setActiveSpellName:(name: string | null) => void
+  setPlayerStatusEffects:(effects: string[]) => void
+  setActiveQuestCount:(count: number) => void
   addNotification:(message: string, type: Notification['type']) => void
   removeNotification:(id: string) => void
   clearExpiredNotifications:() => void
@@ -71,6 +86,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
   activePanel:    null,
   notifications:  [],
   shopOpen:       false,
+  inDungeon:      false,
+  dungeonTier:    0,
+  combatStyle:    'melee',
+  activeSpellName: null,
+  playerStatusEffects: [],
+  activeQuestCount: 0,
 
   setPlayerHP:       (hp, max)    => set({ playerHP: hp, playerMaxHP: max }),
   setPlayerEnergy:   (energy, max)=> set({ playerEnergy: energy, playerMaxEnergy: max }),
@@ -88,6 +109,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     activePanel: s.activePanel === panel ? null : panel,
   })),
   setShopOpen: (open) => set({ shopOpen: open }),
+  setInDungeon: (inDungeon, tier) => set({ inDungeon, dungeonTier: tier ?? 0 }),
+  setCombatStyle: (style) => set({ combatStyle: style }),
+  setActiveSpellName: (name) => set({ activeSpellName: name }),
+  setPlayerStatusEffects: (effects) => set({ playerStatusEffects: effects }),
+  setActiveQuestCount: (count) => set({ activeQuestCount: count }),
 
   addNotification: (message, type) => {
     const id = Math.random().toString(36).slice(2)

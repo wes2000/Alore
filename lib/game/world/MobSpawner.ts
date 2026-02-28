@@ -1,4 +1,4 @@
-import { MobInstance, BiomeType } from '../data/types'
+import { MobInstance, BiomeType, DungeonData } from '../data/types'
 import { MOB_DEFINITIONS } from '../data/mobs'
 import { BIOME_DEFINITIONS } from '../data/biomes'
 import { SeededRandom, chunkSeed } from './noise'
@@ -81,16 +81,109 @@ export class MobSpawner {
         wanderTargetX: x,
         wanderTargetY: y,
         wanderTimer: rng.next() * WANDER_INTERVAL[1],
-        attackCooldown: ATTACK_COOLDOWN * rng.next(),  // stagger initial attacks
+        attackCooldown: ATTACK_COOLDOWN * rng.next(),
         spd: def.baseSpd,
         atk,
         def: Math.round(level * 0.4),
+        mdef: Math.round(level * 0.3),
         tameable: def.tameable,
+        statusEffects: [],
+        isDungeonMob: false,
+        isBoss: false,
       }
       this.mobs.set(mob.id, mob)
       ids.push(mob.id)
     }
 
+    this.chunkMobs.set(key, ids)
+  }
+
+  /** Spawn dungeon-specific mobs in a chunk with dungeon data */
+  spawnDungeonMobs(cx: number, cy: number, biome: BiomeType, dungeonData: import('../data/types').DungeonData): void {
+    const key = `${cx}_${cy}`
+    if (this.chunkMobs.has(key)) return
+
+    const table = BIOME_DEFINITIONS[biome].mobSpawnTable
+    if (table.length === 0) { this.chunkMobs.set(key, []); return }
+
+    const rng = new SeededRandom(chunkSeed(this.worldSeed ^ 0xdead1234, cx, cy))
+    const ids: string[] = []
+
+    for (const room of dungeonData.rooms) {
+      if (room.type === 'entrance') continue
+
+      const roomCenterX = cx * CHUNK_SIZE + room.x + room.w / 2
+      const roomCenterY = cy * CHUNK_SIZE + room.y + room.h / 2
+
+      if (room.type === 'boss') {
+        // Boss mob: pick strongest mob, 3x HP
+        const entry = table[table.length - 1] // highest-tier mob
+        const def = MOB_DEFINITIONS[entry.mobId]
+        if (!def) continue
+        const level = entry.maxLevel + dungeonData.tier * 5
+        const hp = Math.round((def.baseHp + def.hpPerLevel * (level - 1)) * 3)
+        const atk = Math.round((def.baseAtk + def.atkPerLevel * (level - 1)) * 1.5)
+
+        const mob: MobInstance = {
+          id: `mob_${_nextId++}`, mobId: entry.mobId, petDefId: '',
+          x: roomCenterX, y: roomCenterY,
+          hp, maxHp: hp, level, element: def.element, chunkKey: key,
+          state: 'wander', wanderTargetX: roomCenterX, wanderTargetY: roomCenterY,
+          wanderTimer: 3, attackCooldown: 1, spd: def.baseSpd * 0.8,
+          atk, def: Math.round(level * 0.8), mdef: Math.round(level * 0.6),
+          tameable: false, statusEffects: [], isDungeonMob: true, isBoss: true,
+          bossName: `${def.name} Lord (Tier ${dungeonData.tier})`,
+        }
+        this.mobs.set(mob.id, mob)
+        ids.push(mob.id)
+      } else if (room.type === 'pet_lair') {
+        // Spawn a tameable pet in pet lairs
+        const tameableEntries = table.filter(e => MOB_DEFINITIONS[e.mobId]?.tameable)
+        if (tameableEntries.length > 0) {
+          const entry = tameableEntries[Math.floor(rng.next() * tameableEntries.length)]
+          const def = MOB_DEFINITIONS[entry.mobId]
+          if (def) {
+            const level = entry.maxLevel + dungeonData.tier * 2
+            const hp = Math.round(def.baseHp + def.hpPerLevel * (level - 1))
+            const atk = Math.round(def.baseAtk + def.atkPerLevel * (level - 1))
+            const mob: MobInstance = {
+              id: `mob_${_nextId++}`, mobId: entry.mobId, petDefId: def.petDefId,
+              x: roomCenterX, y: roomCenterY,
+              hp, maxHp: hp, level, element: def.element, chunkKey: key,
+              state: 'wander', wanderTargetX: roomCenterX, wanderTargetY: roomCenterY,
+              wanderTimer: 2, attackCooldown: 1, spd: def.baseSpd,
+              atk, def: Math.round(level * 0.4), mdef: Math.round(level * 0.3),
+              tameable: true, statusEffects: [], isDungeonMob: true, isBoss: false,
+            }
+            this.mobs.set(mob.id, mob)
+            ids.push(mob.id)
+          }
+        }
+      } else if (room.type === 'normal') {
+        // Normal room: 1-2 mobs
+        const count = 1 + Math.floor(rng.next() * 2)
+        for (let i = 0; i < count; i++) {
+          const entry = weightedPick(table, rng)
+          const def = MOB_DEFINITIONS[entry.mobId]
+          if (!def) continue
+          const level = entry.minLevel + dungeonData.tier * 3 + Math.floor(rng.next() * 5)
+          const hp = Math.round(def.baseHp + def.hpPerLevel * (level - 1))
+          const atk = Math.round(def.baseAtk + def.atkPerLevel * (level - 1))
+          const x = roomCenterX + (rng.next() - 0.5) * (room.w - 2)
+          const y = roomCenterY + (rng.next() - 0.5) * (room.h - 2)
+          const mob: MobInstance = {
+            id: `mob_${_nextId++}`, mobId: entry.mobId, petDefId: def.petDefId,
+            x, y, hp, maxHp: hp, level, element: def.element, chunkKey: key,
+            state: 'wander', wanderTargetX: x, wanderTargetY: y,
+            wanderTimer: rng.next() * 3, attackCooldown: rng.next() * 1.5,
+            spd: def.baseSpd, atk, def: Math.round(level * 0.4), mdef: Math.round(level * 0.3),
+            tameable: def.tameable, statusEffects: [], isDungeonMob: true, isBoss: false,
+          }
+          this.mobs.set(mob.id, mob)
+          ids.push(mob.id)
+        }
+      }
+    }
     this.chunkMobs.set(key, ids)
   }
 

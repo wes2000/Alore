@@ -58,20 +58,147 @@ export class SkillSystem {
 
     switch (skill) {
       case SkillType.Vitality:
-        // Recalculate max HP
+        // Recalculate max HP: base 100 + 5 per level
         player.maxHp = 100 + (level - 1) * 5
-        player.hp = Math.min(player.hp + 5, player.maxHp)  // gain HP on level up
+        // Milestone bonuses
+        if (level >= 10) player.maxHp += 50
+        if (level >= 40) player.maxHp += 100
+        if (level >= 90) player.maxHp += 200
+        player.hp = Math.min(player.hp + 5, player.maxHp)
         eventBus.emit('player:hp_changed', { current: player.hp, max: player.maxHp })
         break
 
       case SkillType.Defense:
-        // Increase max energy slightly
+        // Increase max energy
         player.maxEnergy = 100 + Math.floor((level - 1) * 0.8)
         break
 
       default:
         break
     }
+  }
+
+  // ─── Gathering Speed Bonus ──────────────────────────────────────────────
+
+  /** Get gathering speed bonus for a skill (0.0 = no bonus, 0.1 = 10% faster) */
+  getGatheringSpeedBonus(skill: SkillType): number {
+    const level = this.getSkillLevel(skill)
+    let bonus = 0
+
+    // Per-level bonus: 1% per level up to 50%
+    bonus += Math.min(0.5, level * 0.01)
+
+    // Milestone passives
+    const def = SKILL_DEFINITIONS[skill]
+    for (const milestone of def.milestones) {
+      if (level >= milestone.level && milestone.passiveBonus?.stat?.includes('Speed')) {
+        bonus += milestone.passiveBonus.value
+      }
+    }
+
+    return bonus
+  }
+
+  // ─── Combat Passive Helpers ─────────────────────────────────────────────
+
+  /** Flat damage reduction from Defense milestones */
+  getDamageReduction(): number {
+    const defLevel = this.getSkillLevel(SkillType.Defense)
+    const vitLevel = this.getSkillLevel(SkillType.Vitality)
+    let reduction = 0
+
+    // Defense 30: Iron Hide — 3% reduction
+    if (defLevel >= 30) reduction += 0.03
+    // Defense 60: Fortress — 8% total
+    if (defLevel >= 60) reduction = 0.08
+    // Defense + Vitality 70: Iron Body — +5%
+    if (defLevel >= 70 && vitLevel >= 70) reduction += 0.05
+
+    return reduction
+  }
+
+  /** Vitality 60: Indomitable — 20% less damage below 25% HP */
+  getIndomitableReduction(): number {
+    const vitLevel = this.getSkillLevel(SkillType.Vitality)
+    if (vitLevel >= 60 && this.playerState.hp < this.playerState.maxHp * 0.25) {
+      return 0.2
+    }
+    return 0
+  }
+
+  /** Magic 20: Spellcaster — 10% spell power bonus */
+  getMagicPowerBonus(): number {
+    const magicLevel = this.getSkillLevel(SkillType.Magic)
+    let bonus = 0
+    if (magicLevel >= 20) bonus += 0.10
+    if (magicLevel >= 40) bonus += 0.10  // Archmage: total 20%
+    return bonus
+  }
+
+  /** Ranged damage bonus helpers */
+  getRangedDamageBonus(distToTarget: number): number {
+    const rangedLevel = this.getSkillLevel(SkillType.Ranged)
+    let bonus = 0
+    // Ranged 50: Sniper — +20% if target > 6 tiles
+    if (rangedLevel >= 50 && distToTarget > 6) bonus += 0.20
+    return bonus
+  }
+
+  /** Melee 20: Warrior — 15% knockback chance */
+  getKnockbackChance(): number {
+    const meleeLevel = this.getSkillLevel(SkillType.Melee)
+    return meleeLevel >= 20 ? 0.15 : 0
+  }
+
+  /** Ranged 30: Sharpshooter — 15% headshot chance (1.5x damage) */
+  getHeadshotChance(): number {
+    const rangedLevel = this.getSkillLevel(SkillType.Ranged)
+    return rangedLevel >= 30 ? 0.15 : 0
+  }
+
+  /** Melee 50: Blade Dancer — 10% free hit */
+  getBladeDanceChance(): number {
+    const meleeLevel = this.getSkillLevel(SkillType.Melee)
+    return meleeLevel >= 50 ? 0.10 : 0
+  }
+
+  /** Get combat ATK including weapon and skills */
+  getPlayerATK(): number {
+    const meleeLevel = this.getSkillLevel(SkillType.Melee)
+    const rangedLevel = this.getSkillLevel(SkillType.Ranged)
+    let baseAtk = 12 + (meleeLevel - 1) * 2
+
+    // Read equipped weapon stat bonus
+    const weapon = this.playerState.equipment?.weapon
+    if (weapon) {
+      const { ITEM_DEFINITIONS } = require('../data/items')
+      const def = ITEM_DEFINITIONS[weapon]
+      if (def?.statBonus?.atk) baseAtk += def.statBonus.atk
+      if (def?.statBonus?.matk) baseAtk += def.statBonus.matk
+    }
+
+    return baseAtk
+  }
+
+  /** Get player DEF including equipment */
+  getPlayerDEF(): number {
+    const defLevel = this.getSkillLevel(SkillType.Defense)
+    let baseDef = Math.floor(defLevel * 0.5)
+
+    // Read equipped armor/shield stat bonuses
+    const eq = this.playerState.equipment
+    if (eq) {
+      const { ITEM_DEFINITIONS } = require('../data/items')
+      for (const slot of ['offhand', 'body'] as const) {
+        const itemId = eq[slot]
+        if (itemId) {
+          const def = ITEM_DEFINITIONS[itemId]
+          if (def?.statBonus?.def) baseDef += def.statBonus.def
+        }
+      }
+    }
+
+    return baseDef
   }
 
   getSkillLevel(skill: SkillType): number {

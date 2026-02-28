@@ -82,7 +82,10 @@ export class GatheringSystem {
     const reward = NODE_REWARD[nodeType]
     const skillLevel = this.skillSystem.getSkillLevel(reward.skill)
     // Each skill level reduces duration by 1% (capped at 50% reduction)
-    const speedMult = 1 + Math.min(50, skillLevel - 1) * 0.01
+    const baseSpeedMult = 1 + Math.min(50, skillLevel - 1) * 0.01
+    // Add milestone passive bonuses (e.g., Mining 20: +10%, Mining 70: +20%)
+    const milestoneBonus = this.skillSystem.getGatheringSpeedBonus(reward.skill)
+    const speedMult = baseSpeedMult + milestoneBonus
     const duration = BASE_DURATION[nodeType] / speedMult
 
     this.job = { nodeId, nodeType, chunkKey, progress: 0, duration }

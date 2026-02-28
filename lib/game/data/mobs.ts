@@ -55,7 +55,7 @@ export const MOB_DEFINITIONS: Record<string, MobDef> = {
     petDefId: 'emberkit', tameable: true,
     color: 0xe05020, accentColor: 0xff8040,
     baseHp: 38, hpPerLevel: 9, baseAtk: 8, atkPerLevel: 2, baseSpd: 3.2,
-    drops: [drop('slime_gel', 0.3), drop('feather', 0.2)],
+    drops: [drop('slime_gel', 0.3), drop('feather', 0.2), drop('fire_shard', 0.02)],
   },
 
   // ─── Forest ────────────────────────────────────────────────────────────────
@@ -262,7 +262,7 @@ export const MOB_DEFINITIONS: Record<string, MobDef> = {
     petDefId: '', tameable: false,
     color: 0x802010, accentColor: 0xc04020,
     baseHp: 400, hpPerLevel: 80, baseAtk: 55, atkPerLevel: 9, baseSpd: 3.0,
-    drops: [drop('scale', 0.9, 3, 6), drop('void_essence', 0.5, 1, 3)],
+    drops: [drop('scale', 0.9, 3, 6), drop('void_essence', 0.5, 1, 3), drop('fire_shard', 0.05)],
   },
   storm_eagle: {
     id: 'storm_eagle', name: 'Storm Eagle', element: Element.Lightning,
