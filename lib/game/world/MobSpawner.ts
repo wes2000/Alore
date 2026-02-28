@@ -6,7 +6,7 @@ import { CHUNK_SIZE } from './BiomeMap'
 import { eventBus } from '../engine/EventBus'
 
 const MAX_MOBS_PER_CHUNK = 2   // reduced from 4 — halves entity count and draw calls
-const CHASE_RANGE   = 10    // tiles: mob starts chasing player
+const CHASE_RANGE   = 6     // tiles: mob starts chasing player
 const ATTACK_RANGE  = 1.3   // tiles: mob attacks player
 const WANDER_SPEED  = 1.6   // tiles/second when wandering
 const WANDER_INTERVAL = [2, 5] as const  // seconds between direction picks

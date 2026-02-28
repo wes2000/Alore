@@ -23,6 +23,7 @@ import { GatheringSystem, NODE_RESPAWN_MS } from './systems/GatheringSystem'
 import { MOB_DEFINITIONS } from './data/mobs'
 import { ITEM_DEFINITIONS } from './data/items'
 import { XP_AWARDS } from './data/skills'
+import { ABILITIES } from './data/abilities'
 import { BIOME_DEFINITIONS, TILE_IMPASSABLE } from './data/biomes'
 
 const PLAYER_SPEED         = 5.0   // tiles per second
@@ -40,7 +41,7 @@ const NODE_RESPAWN_TICKS   = TICK_RATE * 10           // every 10 s
 const PET_BOND_TICKS       = TICK_RATE                // every 1 s
 const ANIM_FRAME_TICKS     = Math.ceil(TICK_RATE / 6) // ~6 animation fps
 
-const PLAYER_ATTACK_RANGE    = 1.5   // tiles
+const PLAYER_ATTACK_RANGE    = 2.5   // tiles (auto-target scan radius)
 const PLAYER_ATTACK_BASE_DMG = 12    // damage at melee level 1
 const PLAYER_ATTACK_COOLDOWN = 0.7   // seconds between attacks
 const INTERACT_RANGE         = 2.5   // tiles
@@ -80,6 +81,9 @@ export class GameEngine {
   private liveMobIds = new Set<string>()
   private mobEntityIds = new Set<string>()
   private lastInteractLabel = ''
+
+  // Pet ability cooldown tracking: petInstanceId → { abilityId → lastUsedTimeSec }
+  private petAbilityCooldowns = new Map<string, Record<string, number>>()
 
   // Previous player position for camera interpolation (set each tick before movement)
   private prevPlayerX = 0
@@ -338,6 +342,7 @@ export class GameEngine {
   private updatePets(dt: number): void {
     const active = this.petSystem.activePets
     const p = this.playerState
+    const nowSec = Date.now() / 1000
 
     active.forEach((pet, slot) => {
       const angle = (slot / Math.max(1, active.length)) * Math.PI * 2 + this.tickCount * 0.02
@@ -370,6 +375,45 @@ export class GameEngine {
       if (this.tickCount % PET_BOND_TICKS === 0) {
         this.petSystem.awardBondXP(pet.instanceId, 0.5)
       }
+
+      // ── Pet combat AI ──────────────────────────────────────────────────────
+      // Check every 3 ticks (~10 Hz) to keep overhead low
+      if (this.tickCount % 3 === 0 && pet.activeAbilities.length > 0) {
+        const petCx = targetX + 0.5
+        const petCy = targetY + 0.5
+        const nearbyMob = this.mobSpawner.getMobAt(petCx, petCy, 5.0)
+        if (nearbyMob) {
+          const cooldowns = this.petAbilityCooldowns.get(pet.instanceId) ?? {}
+          for (const abilityId of pet.activeAbilities) {
+            const ability = ABILITIES[abilityId]
+            if (!ability || ability.isPassive || ability.basePower === 0) continue
+            const lastUsed = cooldowns[abilityId] ?? 0
+            if (nowSec - lastUsed >= ability.cooldown) {
+              // Use the ability!
+              cooldowns[abilityId] = nowSec
+              this.petAbilityCooldowns.set(pet.instanceId, cooldowns)
+
+              const atkStat = ability.damageType === 'Magical' ? pet.stats.matk : pet.stats.atk
+              const dmg = Math.max(1, Math.floor(ability.basePower * 0.4 + atkStat * 0.6) - nearbyMob.def)
+              const result = this.mobSpawner.damageMob(nearbyMob.id, dmg)
+
+              this.entityRenderer.spawnAttackEffect(nearbyMob.x + 0.5, nearbyMob.y + 0.5)
+              if (result) this.entityRenderer.flash(`mob_${nearbyMob.id}`, 0xff8800, 120)
+              this.entityRenderer.showSpeechBubble(
+                `pet_${pet.instanceId}`,
+                `${pet.name}: ${ability.name}!`,
+                2500
+              )
+
+              if (result?.state === 'dead') {
+                this.onMobDied(result)
+                this.petSystem.awardPetXP(pet.instanceId, 20 + nearbyMob.level * 5)
+              }
+              break
+            }
+          }
+        }
+      }
     })
   }
 
@@ -394,8 +438,8 @@ export class GameEngine {
       }
       const off = dirOffsets[this.playerDir] ?? { x: 0, y: 1 }
       this.entityRenderer.spawnAttackEffect(
-        p.x + 0.5 + off.x * PLAYER_ATTACK_RANGE * 0.6,
-        p.y + 0.5 + off.y * PLAYER_ATTACK_RANGE * 0.6,
+        p.x + 0.5 + off.x * 1.1,
+        p.y + 0.5 + off.y * 1.1,
       )
       return
     }

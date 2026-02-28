@@ -13,6 +13,11 @@ interface EntityVisual {
   currY: number
 }
 
+interface SpeechBubble {
+  sprite: THREE.Sprite
+  texture: THREE.CanvasTexture
+}
+
 // Entity types for the renderer
 export type EntityKind = 'player' | 'pet' | 'mob'
 
@@ -26,6 +31,7 @@ export class EntityRenderer {
   private playerDir: PlayerDirection = 'down'
   private playerFrame = 0
   private playerSpriteApplied = false  // tracks if sprite texture was applied
+  private speechBubbles = new Map<string, SpeechBubble>()
 
   constructor(scene: THREE.Scene) {
     this.scene = scene
@@ -109,6 +115,74 @@ export class EntityRenderer {
     e.labelSprite?.material.map?.dispose()
     e.labelSprite?.material.dispose()
     this.entities.delete(id)
+    // Clean up speech bubble if present
+    const bubble = this.speechBubbles.get(id)
+    if (bubble) {
+      this.scene.remove(bubble.sprite)
+      bubble.texture.dispose()
+      ;(bubble.sprite.material as THREE.SpriteMaterial).dispose()
+      this.speechBubbles.delete(id)
+    }
+  }
+
+  /** Display a speech bubble above an entity for durationMs then fade it out. */
+  showSpeechBubble(entityId: string, text: string, durationMs = 2000): void {
+    const e = this.entities.get(entityId)
+    if (!e) return
+
+    // Remove any existing bubble for this entity
+    const old = this.speechBubbles.get(entityId)
+    if (old) {
+      this.scene.remove(old.sprite)
+      old.texture.dispose()
+      ;(old.sprite.material as THREE.SpriteMaterial).dispose()
+      this.speechBubbles.delete(entityId)
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = 200
+    canvas.height = 30
+    const ctx = canvas.getContext('2d')!
+    ctx.fillStyle = '#F0E8C8'
+    ctx.fillRect(0, 0, 200, 30)
+    ctx.strokeStyle = '#181818'
+    ctx.lineWidth = 2
+    ctx.strokeRect(1, 1, 198, 28)
+    ctx.font = 'bold 9px monospace'
+    ctx.fillStyle = '#181818'
+    ctx.textAlign = 'center'
+    ctx.fillText(text, 100, 20)
+
+    const texture = new THREE.CanvasTexture(canvas)
+    texture.minFilter = THREE.LinearFilter
+    const mat = new THREE.SpriteMaterial({ map: texture, transparent: true })
+    const sprite = new THREE.Sprite(mat)
+    sprite.scale.set(2.4, 0.38, 1)
+    sprite.position.set(e.currX + 0.5, -(e.currY + 0.5) + 1.3, 0.8)
+    this.scene.add(sprite)
+    this.speechBubbles.set(entityId, { sprite, texture })
+
+    const fadeDelay = durationMs * 0.65
+    const startTime = performance.now()
+    const tick = () => {
+      const elapsed = performance.now() - startTime
+      if (elapsed >= durationMs) {
+        this.scene.remove(sprite)
+        texture.dispose()
+        mat.dispose()
+        this.speechBubbles.delete(entityId)
+        return
+      }
+      if (elapsed > fadeDelay) {
+        mat.opacity = 1 - (elapsed - fadeDelay) / (durationMs - fadeDelay)
+      }
+      const ent = this.entities.get(entityId)
+      if (ent) {
+        sprite.position.set(ent.currX + 0.5, -(ent.currY + 0.5) + 1.3, 0.8)
+      }
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
   }
 
   /** Read-only access to entity state — used by HealthBarRenderer in the render pass. */

@@ -6,7 +6,6 @@ import { BIOME_DEFINITIONS } from '@/lib/game/data/biomes'
 import { GameEngine } from '@/lib/game/GameEngine'
 import Minimap from './Minimap'
 
-// ── Pokémon Red/Blue palette ──────────────────────────────────────────────────
 const CREAM  = '#F0E8C8'
 const BLACK  = '#181818'
 const RED    = '#D03030'
@@ -25,16 +24,19 @@ const panel: React.CSSProperties = {
   imageRendering: 'pixelated',
 }
 
-interface HUDProps {
-  engine: GameEngine | null
+/** Convert camelCase node type to readable label: "OakTree" → "Oak Tree" */
+function fmtNode(nodeType: string): string {
+  return nodeType.replace(/([A-Z])/g, ' $1').trim()
 }
+
+interface HUDProps { engine: GameEngine | null }
 
 export default function HUD({ engine }: HUDProps) {
   const {
     playerHP, playerMaxHP, playerEnergy, playerMaxEnergy,
     playerGold, currentBiome, fps,
     activePanel, togglePanel, notifications,
-    interactPrompt, gatherProgress,
+    interactPrompt, gatherProgress, gatherNodeType,
     playerATK, playerDEF,
   } = useGameStore()
 
@@ -49,8 +51,6 @@ export default function HUD({ engine }: HUDProps) {
       {/* ── Top-left: Vitals ── */}
       <div className="absolute left-2 top-2 flex flex-col gap-1.5" style={{ width: 178 }}>
         <div style={{ ...panel, padding: '7px 9px' }}>
-
-          {/* HP row */}
           <div style={{ marginBottom: 7 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 6, marginBottom: 4 }}>
               <span style={{ color: RED }}>HP</span>
@@ -58,8 +58,6 @@ export default function HUD({ engine }: HUDProps) {
             </div>
             <SegBar pct={hpPct} color={hpColor} />
           </div>
-
-          {/* Energy row */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 6, marginBottom: 4 }}>
               <span style={{ color: BLUE }}>EN</span>
@@ -67,18 +65,18 @@ export default function HUD({ engine }: HUDProps) {
             </div>
             <SegBar pct={energyPct} color={BLUE} />
           </div>
-
-          {/* Stats row */}
           <div style={{ display: 'flex', gap: 10, marginTop: 6, fontSize: 5 }}>
             <span>ATK <span style={{ color: YELLOW }}>{playerATK}</span></span>
             <span>DEF <span style={{ color: BLUE }}>{playerDEF}</span></span>
           </div>
         </div>
 
-        {/* Gather progress */}
+        {/* Gather progress — shows node name while active */}
         {gatherProgress !== null && (
           <div style={{ ...panel, padding: '6px 9px' }}>
-            <div style={{ fontSize: 5, marginBottom: 4, color: GOLD }}>GATHERING...</div>
+            <div style={{ fontSize: 5, marginBottom: 4, color: GOLD }}>
+              {gatherNodeType ? fmtNode(gatherNodeType).toUpperCase() : 'GATHERING'}...
+            </div>
             <SegBar pct={gatherProgress} color={GOLD} />
           </div>
         )}
@@ -96,6 +94,46 @@ export default function HUD({ engine }: HUDProps) {
         </div>
       </div>
 
+      {/* ── Right side: Window buttons (below minimap) ── */}
+      <div
+        className="pointer-events-auto absolute right-2 flex flex-col gap-1"
+        style={{ top: 150 }}
+      >
+        {[
+          { label: 'SKL', panel: 'skills',    hotkey: 'L' },
+          { label: 'PET', panel: 'pets',      hotkey: 'P' },
+          { label: 'INV', panel: 'inventory', hotkey: 'I' },
+          { label: 'MAP', panel: 'map',       hotkey: 'M' },
+        ].map(({ label, panel: p, hotkey }) => {
+          const isActive = activePanel === p
+          return (
+            <button
+              key={p}
+              onClick={() => togglePanel(p as 'skills' | 'pets' | 'inventory' | 'map')}
+              style={{
+                ...panel,
+                padding: '5px 7px',
+                fontSize: 6,
+                fontFamily: "'Press Start 2P', monospace",
+                background: isActive ? BLACK : CREAM,
+                color: isActive ? CREAM : BLACK,
+                boxShadow: isActive ? 'none' : `2px 2px 0 ${BLACK}`,
+                transform: isActive ? 'translate(1px,1px)' : 'none',
+                cursor: 'pointer',
+                textAlign: 'center',
+                userSelect: 'none',
+                lineHeight: 1,
+                minWidth: 36,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+              }}
+            >
+              <span>{label}</span>
+              <span style={{ fontSize: 4, opacity: 0.6 }}>[{hotkey}]</span>
+            </button>
+          )
+        })}
+      </div>
+
       {/* ── Interact Prompt ── */}
       {interactPrompt && (
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2">
@@ -105,62 +143,17 @@ export default function HUD({ engine }: HUDProps) {
         </div>
       )}
 
-      {/* ── Bottom: Action Bar (2×2 battle menu) ── */}
-      <div className="pointer-events-auto absolute bottom-3 left-1/2 -translate-x-1/2">
-        <div style={{
-          ...panel,
-          padding: 0,
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          overflow: 'hidden',
-        }}>
-          {[
-            { label: 'SKILLS', panel: 'skills',    hotkey: 'L' },
-            { label: 'PETS',   panel: 'pets',      hotkey: 'P' },
-            { label: 'ITEMS',  panel: 'inventory', hotkey: 'TAB' },
-            { label: 'MAP',    panel: 'map',       hotkey: 'M' },
-          ].map(({ label, panel: p, hotkey }) => {
-            const isActive = activePanel === p
-            return (
-              <button
-                key={p}
-                onClick={() => togglePanel(p as 'skills' | 'pets' | 'inventory' | 'map')}
-                style={{
-                  padding: '7px 11px',
-                  fontSize: 6,
-                  fontFamily: "'Press Start 2P', monospace",
-                  background: isActive ? BLACK : CREAM,
-                  color: isActive ? CREAM : BLACK,
-                  border: `1px solid ${BLACK}`,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  transition: 'none',
-                  userSelect: 'none',
-                  lineHeight: 1,
-                }}
-              >
-                <span style={{ color: isActive ? CREAM : RED, width: 6 }}>{isActive ? '▶' : ''}</span>
-                {label}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* ── Notifications ── */}
-      <div className="absolute right-2 bottom-20 flex flex-col gap-1.5 items-end" style={{ maxWidth: 200 }}>
+      {/* ── Notifications (bottom-left, above mobile controls) ── */}
+      <div className="absolute left-2 flex flex-col gap-1.5 items-start" style={{ bottom: 280, maxWidth: 200 }}>
         {notifications.map(n => (
           <div
             key={n.id}
             className="animate-fade-in"
             style={{
               ...panel,
-              padding: '6px 10px',
+              padding: '5px 8px',
               fontSize: 6,
-              lineHeight: '13px',
+              lineHeight: '12px',
               borderLeft: `5px solid ${notifAccent(n.type)}`,
             }}
           >
@@ -182,22 +175,13 @@ export default function HUD({ engine }: HUDProps) {
   )
 }
 
-// ── 16-segment bar (Pokémon style) ───────────────────────────────────────────
 function SegBar({ pct, color }: { pct: number; color: string }) {
   const SEG = 16
   const filled = Math.round(pct * SEG)
   return (
     <div style={{ display: 'flex', gap: 1, height: 5 }}>
       {Array.from({ length: SEG }, (_, i) => (
-        <div
-          key={i}
-          style={{
-            flex: 1,
-            height: '100%',
-            background: i < filled ? color : '#C8B888',
-            border: `1px solid ${BLACK}`,
-          }}
-        />
+        <div key={i} style={{ flex: 1, height: '100%', background: i < filled ? color : '#C8B888', border: `1px solid ${BLACK}` }} />
       ))}
     </div>
   )
