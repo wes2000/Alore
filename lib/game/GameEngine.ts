@@ -30,7 +30,8 @@ const SPRINT_MULT          = 1.7
 const ENERGY_SPRINT_DRAIN  = 12    // energy/sec while sprinting
 const ENERGY_REGEN         = 6     // energy/sec when not sprinting
 
-const PRELOAD_RADIUS       = 3     // chunks around player to preload
+const PRELOAD_RADIUS       = 3     // chunks around player to preload (tile data, collision)
+const RENDER_RADIUS        = 2     // chunks around player to hold GPU textures (5×5 = 25 max)
 const AUTO_SAVE_TICKS      = 60 * 30  // ~every 30 s at 60 tps
 
 const PLAYER_ATTACK_RANGE    = 1.5   // tiles
@@ -150,12 +151,11 @@ export class GameEngine {
     this.chunkSystem.preloadAround(this.playerState.x, this.playerState.y, PRELOAD_RADIUS)
     this.syncChunksToRenderer()
 
-    // Load sprites async; rebake once ready
+    // Load sprites async; rebake in-place once ready (no mesh destroy/recreate)
     this.spriteManager.load().then(() => {
       this.chunkRenderer.setSpriteManager(this.spriteManager)
       this.entityRenderer.setSpriteManager(this.spriteManager)
       this.chunkRenderer.rebakeAll()
-      this.syncChunksToRenderer()
     })
 
     this.initialized = true
@@ -639,18 +639,22 @@ export class GameEngine {
   }
 
   private syncChunksToRenderer(): void {
-    const p = this.playerState
+    const p  = this.playerState
     const cx = Math.floor(p.x / CHUNK_SIZE)
     const cy = Math.floor(p.y / CHUNK_SIZE)
-    const radius = PRELOAD_RADIUS + 1
 
-    for (let dy = -radius; dy <= radius; dy++) {
-      for (let dx = -radius; dx <= radius; dx++) {
+    // Build GPU meshes only within RENDER_RADIUS (5×5 = 25 chunks max).
+    // PRELOAD_RADIUS tile data is still warmed by checkChunkTransition for collision / mob logic.
+    for (let dy = -RENDER_RADIUS; dy <= RENDER_RADIUS; dy++) {
+      for (let dx = -RENDER_RADIUS; dx <= RENDER_RADIUS; dx++) {
         const chunk = this.chunkSystem.getChunk(cx + dx, cy + dy)
         this.chunkRenderer.addChunk(chunk)
         this.mobSpawner.spawnForChunk(cx + dx, cy + dy, chunk.biome)
       }
     }
+
+    // Evict chunks that have scrolled too far away so GPU memory doesn't grow unboundedly.
+    this.chunkRenderer.removeChunksOutsideRadius(cx, cy, RENDER_RADIUS + 1)
   }
 
   // ─── Render (interpolated) ───────────────────────────────────────────────

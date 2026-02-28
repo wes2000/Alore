@@ -23,8 +23,10 @@ const ROOM_COLORS: Record<string, string> = {
 
 export class ChunkRenderer {
   private scene: THREE.Scene
-  private meshes = new Map<string, THREE.Mesh>()
-  private textures = new Map<string, THREE.CanvasTexture>()
+  private meshes      = new Map<string, THREE.Mesh>()
+  private textures    = new Map<string, THREE.CanvasTexture>()
+  private chunkStates = new Map<string, ChunkState>()          // live refs — always current
+  private chunkCoords = new Map<string, { cx: number; cy: number }>() // avoids split/parseInt hot-path
   private canvas2d: HTMLCanvasElement
   private ctx2d: CanvasRenderingContext2D
   private sprites: SpriteManager | null = null
@@ -46,20 +48,20 @@ export class ChunkRenderer {
     return `${cx}_${cy}`
   }
 
-  /** Re-bake all cached chunk textures (call after sprites finish loading). */
+  /**
+   * Repaint all loaded chunk textures in-place after the sprite manager loads.
+   * Does NOT destroy/recreate meshes or canvases — avoids the GC spike that
+   * previously caused a hard stall ~2 s after startup.
+   */
   rebakeAll(): void {
-    // We need to access the chunk data to repaint, but we only cache the mesh/texture.
-    // Mark all textures as stale by clearing the mesh map — next addChunk call will repaint.
-    // ChunkSystem will re-add them via syncChunksToRenderer.
-    for (const [k, mesh] of this.meshes) {
+    for (const [k, chunk] of this.chunkStates) {
       const tex = this.textures.get(k)
-      if (tex) { tex.dispose() }
-      this.scene.remove(mesh)
-      ;(mesh.material as THREE.Material).dispose()
-      mesh.geometry.dispose()
+      if (!tex) continue
+      this.paintChunk(chunk)
+      const snapCtx = (tex.image as HTMLCanvasElement).getContext('2d')!
+      snapCtx.drawImage(this.canvas2d, 0, 0)
+      tex.needsUpdate = true
     }
-    this.meshes.clear()
-    this.textures.clear()
   }
 
   addChunk(chunk: ChunkState): void {
@@ -71,16 +73,17 @@ export class ChunkRenderer {
     const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: false })
     const mesh = new THREE.Mesh(geo, mat)
 
-    // Position: chunk origin is top-left, Three.js center-pivot
     mesh.position.set(
       chunk.cx * CHUNK_SIZE + CHUNK_SIZE / 2,
-      -(chunk.cy * CHUNK_SIZE + CHUNK_SIZE / 2),  // Y is flipped (down = +Y in tile space)
+      -(chunk.cy * CHUNK_SIZE + CHUNK_SIZE / 2),
       0
     )
 
     this.scene.add(mesh)
     this.meshes.set(k, mesh)
     this.textures.set(k, texture)
+    this.chunkStates.set(k, chunk)
+    this.chunkCoords.set(k, { cx: chunk.cx, cy: chunk.cy })
   }
 
   removeChunk(cx: number, cy: number): void {
@@ -95,6 +98,17 @@ export class ChunkRenderer {
     }
     this.textures.get(k)?.dispose()
     this.textures.delete(k)
+    this.chunkStates.delete(k)
+    this.chunkCoords.delete(k)
+  }
+
+  /** Unload chunks whose distance from (playerCX, playerCY) exceeds maxRadius. */
+  removeChunksOutsideRadius(playerCX: number, playerCY: number, maxRadius: number): void {
+    for (const [, { cx, cy }] of this.chunkCoords) {
+      if (Math.abs(cx - playerCX) > maxRadius || Math.abs(cy - playerCY) > maxRadius) {
+        this.removeChunk(cx, cy)
+      }
+    }
   }
 
   refreshChunk(chunk: ChunkState): void {
@@ -188,27 +202,21 @@ export class ChunkRenderer {
     }
   }
 
-  /** Update which chunks are visible based on camera position */
+  /** Update which chunks are visible based on camera position. */
   syncVisible(camX: number, camY: number, rxTiles: number, ryTiles: number): void {
-    // Convert camera position to chunk coords
-    const camCX = Math.floor(camX / CHUNK_SIZE)
-    const camCY = Math.floor(-camY / CHUNK_SIZE)
+    const camCX    = Math.floor(camX  / CHUNK_SIZE)
+    const camCY    = Math.floor(-camY / CHUNK_SIZE)
     const rxChunks = Math.ceil(rxTiles / CHUNK_SIZE) + 1
     const ryChunks = Math.ceil(ryTiles / CHUNK_SIZE) + 1
 
-    // Hide chunks outside view range
     for (const [k, mesh] of this.meshes) {
-      const [cxStr, cyStr] = k.split('_')
-      const cx = parseInt(cxStr)
-      const cy = parseInt(cyStr)
-      const visible = Math.abs(cx - camCX) <= rxChunks && Math.abs(cy - camCY) <= ryChunks
-      mesh.visible = visible
+      const { cx, cy } = this.chunkCoords.get(k)!
+      mesh.visible = Math.abs(cx - camCX) <= rxChunks && Math.abs(cy - camCY) <= ryChunks
     }
   }
 
   dispose(): void {
-    for (const [k] of this.meshes) {
-      const [cx, cy] = k.split('_').map(Number)
+    for (const [, { cx, cy }] of this.chunkCoords) {
       this.removeChunk(cx, cy)
     }
   }
