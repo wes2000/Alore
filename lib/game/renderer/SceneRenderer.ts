@@ -24,7 +24,9 @@ export class SceneRenderer {
       antialias: false,  // pixel art — no AA
       powerPreference: 'high-performance',
     })
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    // Cap at 1 — rendering at native DPR (2× on Retina) is 4× the GPU work for
+    // minimal visual gain on pixel-art tiles. Keeps the frame budget predictable.
+    this.renderer.setPixelRatio(1)
     this.renderer.setSize(this.width, this.height)
     this.renderer.autoClear = false
 

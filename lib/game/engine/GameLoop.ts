@@ -1,4 +1,5 @@
-export const TICK_RATE = 60           // logic ticks per second
+export const TICK_RATE = 30           // logic ticks per second (30 Hz is plenty for a top-down RPG;
+                                       // visuals interpolate smoothly to whatever fps the browser hits)
 export const TICK_MS  = 1000 / TICK_RATE
 const MAX_DELTA_MS       = 100        // cap large gaps (tab switch, breakpoint)
 const MAX_UPDATES_FRAME  = 3          // cap update iterations per RAF to prevent spiral

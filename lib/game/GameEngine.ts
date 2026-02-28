@@ -11,7 +11,7 @@ import { SceneRenderer } from './renderer/SceneRenderer'
 import { ChunkRenderer } from './renderer/ChunkRenderer'
 import { EntityRenderer, HealthBarRenderer } from './renderer/EntityRenderer'
 import { SpriteManager, PlayerDirection } from './renderer/SpriteManager'
-import { GameLoop } from './engine/GameLoop'
+import { GameLoop, TICK_RATE } from './engine/GameLoop'
 import { InputSystem } from './engine/InputSystem'
 import { eventBus } from './engine/EventBus'
 import { SkillSystem } from './systems/SkillSystem'
@@ -32,7 +32,13 @@ const ENERGY_REGEN         = 6     // energy/sec when not sprinting
 
 const PRELOAD_RADIUS       = 3     // chunks around player to preload (tile data, collision)
 const RENDER_RADIUS        = 2     // chunks around player to hold GPU textures (5×5 = 25 max)
-const AUTO_SAVE_TICKS      = 60 * 30  // ~every 30 s at 60 tps
+
+// Tick-count thresholds derived from TICK_RATE so they stay correct if the rate changes
+const AUTO_SAVE_TICKS      = TICK_RATE * 30           // every 30 s
+const NEARBY_CHECK_TICKS   = Math.ceil(TICK_RATE / 10) // 10× per second (~100 ms)
+const NODE_RESPAWN_TICKS   = TICK_RATE * 10           // every 10 s
+const PET_BOND_TICKS       = TICK_RATE                // every 1 s
+const ANIM_FRAME_TICKS     = Math.ceil(TICK_RATE / 6) // ~6 animation fps
 
 const PLAYER_ATTACK_RANGE    = 1.5   // tiles
 const PLAYER_ATTACK_BASE_DMG = 12    // damage at melee level 1
@@ -228,7 +234,7 @@ export class GameEngine {
 
     this.handlePlayerAttack()
     this.handleInteract()
-    if (this.tickCount % 6 === 0) this.checkNearbyInteractions()
+    if (this.tickCount % NEARBY_CHECK_TICKS === 0) this.checkNearbyInteractions()
     this.syncMobsToRenderer()
     this.mobSpawner.removeDead()
 
@@ -302,7 +308,7 @@ export class GameEngine {
 
     if (isMoving) {
       this.playerFrameTick++
-      if (this.playerFrameTick >= 10) {
+      if (this.playerFrameTick >= ANIM_FRAME_TICKS) {
         this.playerFrameTick = 0
         this.playerFrame = (this.playerFrame + 1) % 3
       }
@@ -362,7 +368,7 @@ export class GameEngine {
         })
       }
 
-      if (this.tickCount % 60 === 0) {
+      if (this.tickCount % PET_BOND_TICKS === 0) {
         this.petSystem.awardBondXP(pet.instanceId, 0.5)
       }
     })
@@ -583,7 +589,7 @@ export class GameEngine {
   }
 
   private checkNodeRespawns(): void {
-    if (this.tickCount % 600 !== 0) return  // ~every 10 s at 60 tps
+    if (this.tickCount % NODE_RESPAWN_TICKS !== 0) return  // every 10 s
 
     const now = Date.now()
     const p = this.playerState
@@ -667,6 +673,10 @@ export class GameEngine {
     const camX =  this.prevPlayerX + (p.x - this.prevPlayerX) * alpha + 0.5
     const camY = -(this.prevPlayerY + (p.y - this.prevPlayerY) * alpha + 0.5)
     this.sceneRenderer.setCameraPosition(camX, camY)
+
+    // Build/repaint at most 2 chunks per frame — spreads expensive canvas work
+    // so no single frame ever stalls waiting for chunk painting.
+    this.chunkRenderer.processPending(2)
 
     const { rx, ry } = this.sceneRenderer.getVisibleTileRadius()
     this.chunkRenderer.syncVisible(camX, camY, rx, ry)
