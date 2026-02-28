@@ -34,6 +34,9 @@ export enum TileType {
   Mountain = 'Mountain',
   Flower = 'Flower',
   Mushroom = 'Mushroom',
+  DungeonEntrance = 'DungeonEntrance',
+  DungeonFloor = 'DungeonFloor',
+  DungeonWall = 'DungeonWall',
 }
 
 export enum Element {
@@ -257,6 +260,8 @@ export interface SkillDefinition {
   milestones: SkillMilestone[]
 }
 
+export type WeaponStyle = 'melee' | 'staff' | 'bow'
+
 export interface ItemDefinition {
   id: string
   name: string
@@ -269,6 +274,11 @@ export interface ItemDefinition {
   icon: string   // emoji
   statBonus?: Partial<PetStats>
   skillReq?: { skill: SkillType; level: number }
+  weaponStyle?: WeaponStyle    // melee sword, staff, or bow
+  atkRange?: number            // attack range in tiles (bows)
+  element?: Element            // element for staves
+  equipSlot?: EquipmentSlot    // which slot this equips to
+  healAmount?: number          // for consumables
 }
 
 export interface BiomeDefinition {
@@ -337,6 +347,20 @@ export interface InventoryItem {
   slotIndex: number
 }
 
+export type EquipmentSlot = 'weapon' | 'offhand' | 'body'
+
+export interface Equipment {
+  weapon: string | null   // itemId
+  offhand: string | null  // itemId (shield)
+  body: string | null     // itemId (armor)
+}
+
+export interface ActiveQuest {
+  questId: string
+  objectives: Record<string, number>  // objectiveId → current progress
+  startedAt: number
+}
+
 export interface PlayerState {
   id: string
   name: string
@@ -349,11 +373,19 @@ export interface PlayerState {
   gold: number
   skills: Record<SkillType, SkillState>
   inventory: InventoryItem[]
+  equipment: Equipment
   pets: PetInstance[]
   worldSeed: number
   playtime: number  // seconds
   discoveredPOIs: string[]
   completedQuests: string[]
+  activeQuests: ActiveQuest[]
+  currentDungeon: string | null  // chunkKey if inside a dungeon
+  playerStatusEffects: ActiveStatusEffect[]
+  equippedSpellIndex: number  // index into unlocked spells
+  combatStyle: 'melee' | 'ranged' | 'magic'
+  comboHitCount: number       // for melee combo tracker
+  lastComboTime: number       // timestamp of last combo hit
 }
 
 export interface ChunkState {
@@ -415,5 +447,10 @@ export interface MobInstance {
   spd: number             // tiles per second
   atk: number             // base damage per attack
   def: number             // damage reduction
+  mdef: number            // magic damage reduction
   tameable: boolean
+  statusEffects: ActiveStatusEffect[]
+  isDungeonMob: boolean
+  isBoss: boolean
+  bossName?: string
 }

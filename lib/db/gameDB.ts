@@ -42,11 +42,19 @@ export function createDefaultPlayer(id: string): PlayerState {
       { itemId: 'hp_potion_s', quantity: 5, slotIndex: 0 },
       { itemId: 'taming_snare', quantity: 3, slotIndex: 1 },
     ],
+    equipment: { weapon: null, offhand: null, body: null },
     pets: [],
     worldSeed: Math.floor(Math.random() * 0xffffffff),
     playtime: 0,
     discoveredPOIs: [],
     completedQuests: [],
+    activeQuests: [],
+    currentDungeon: null,
+    playerStatusEffects: [],
+    equippedSpellIndex: 0,
+    combatStyle: 'melee',
+    comboHitCount: 0,
+    lastComboTime: 0,
   }
 }
 
@@ -66,8 +74,12 @@ export async function savePlayer(player: PlayerState): Promise<void> {
         playtime:        player.playtime,
         skills:          player.skills as unknown as Record<string, unknown>,
         inventory:       player.inventory as unknown as Record<string, unknown>[],
+        equipment:       player.equipment as unknown as Record<string, unknown>,
         discoveredPOIs:  player.discoveredPOIs as unknown as Record<string, unknown>[],
         completedQuests: player.completedQuests as unknown as Record<string, unknown>[],
+        activeQuests:    player.activeQuests as unknown as Record<string, unknown>[],
+        combatStyle:     player.combatStyle,
+        equippedSpellIndex: player.equippedSpellIndex,
         lastSaved:       Date.now(),
       }),
     ])
@@ -103,9 +115,17 @@ export async function loadPlayer(playerId: string): Promise<PlayerState | null> 
       playtime:        (p.playtime as number) ?? 0,
       skills:          (p.skills as PlayerState['skills']) ?? createAllSkills(),
       inventory:       (p.inventory as PlayerState['inventory']) ?? [],
+      equipment:       (p.equipment as PlayerState['equipment']) ?? { weapon: null, offhand: null, body: null },
       pets:            [],  // loaded separately
       discoveredPOIs:  (p.discoveredPOIs as string[]) ?? [],
       completedQuests: (p.completedQuests as string[]) ?? [],
+      activeQuests:    (p.activeQuests as PlayerState['activeQuests']) ?? [],
+      currentDungeon:  null,
+      playerStatusEffects: [],
+      equippedSpellIndex: (p.equippedSpellIndex as number) ?? 0,
+      combatStyle:     (p.combatStyle as PlayerState['combatStyle']) ?? 'melee',
+      comboHitCount:   0,
+      lastComboTime:   0,
     }
   } catch (e) {
     console.error('loadPlayer failed:', e)

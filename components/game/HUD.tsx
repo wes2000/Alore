@@ -6,6 +6,8 @@ import { BIOME_DEFINITIONS } from '@/lib/game/data/biomes'
 import { GameEngine } from '@/lib/game/GameEngine'
 import Minimap from './Minimap'
 import ShopPanel from './ShopPanel'
+import CraftingPanel from './panels/CraftingPanel'
+import QuestPanel from './panels/QuestPanel'
 
 const CREAM  = '#F0E8C8'
 const BLACK  = '#181818'
@@ -39,6 +41,8 @@ export default function HUD({ engine }: HUDProps) {
     activePanel, togglePanel, notifications,
     interactPrompt, gatherProgress, gatherNodeType,
     playerATK, playerDEF, shopOpen,
+    inDungeon, dungeonTier, combatStyle, activeSpellName,
+    playerStatusEffects, activeQuestCount,
   } = useGameStore()
 
   const hpPct     = Math.max(0, playerHP / Math.max(1, playerMaxHP))
@@ -70,6 +74,25 @@ export default function HUD({ engine }: HUDProps) {
             <span>ATK <span style={{ color: YELLOW }}>{playerATK}</span></span>
             <span>DEF <span style={{ color: BLUE }}>{playerDEF}</span></span>
           </div>
+          {/* Combat style + spell indicator */}
+          <div style={{ display: 'flex', gap: 6, marginTop: 4, fontSize: 5 }}>
+            <span style={{ color: combatStyle === 'melee' ? YELLOW : combatStyle === 'ranged' ? GREEN : '#A060E0' }}>
+              {combatStyle === 'melee' ? 'MELEE' : combatStyle === 'ranged' ? 'RANGED' : 'MAGIC'}
+            </span>
+            {activeSpellName && combatStyle === 'magic' && (
+              <span style={{ color: '#A060E0' }}>{activeSpellName}</span>
+            )}
+          </div>
+          {/* Status effects on player */}
+          {playerStatusEffects.length > 0 && (
+            <div style={{ display: 'flex', gap: 3, marginTop: 3, fontSize: 4 }}>
+              {playerStatusEffects.map((se, i) => (
+                <span key={i} style={{ color: se === 'Burn' ? RED : se === 'Slow' ? BLUE : se === 'Weaken' ? '#A060E0' : SHADOW, border: `1px solid ${BLACK}`, padding: '1px 3px' }}>
+                  {se}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Gather progress — shows node name while active */}
@@ -105,12 +128,14 @@ export default function HUD({ engine }: HUDProps) {
           { label: 'PET', panel: 'pets',      hotkey: 'P' },
           { label: 'INV', panel: 'inventory', hotkey: 'I' },
           { label: 'MAP', panel: 'map',       hotkey: 'M' },
+          { label: 'CRF', panel: 'crafting',  hotkey: 'C' },
+          { label: 'QST', panel: 'quests',    hotkey: 'J' },
         ].map(({ label, panel: p, hotkey }) => {
           const isActive = activePanel === p
           return (
             <button
               key={p}
-              onClick={() => togglePanel(p as 'skills' | 'pets' | 'inventory' | 'map')}
+              onClick={() => togglePanel(p as 'skills' | 'pets' | 'inventory' | 'map' | 'crafting' | 'quests')}
               style={{
                 ...panel,
                 padding: '5px 7px',
@@ -167,8 +192,35 @@ export default function HUD({ engine }: HUDProps) {
         </div>
       )}
 
+      {/* ── Dungeon indicator ── */}
+      {inDungeon && (
+        <div className="absolute left-1/2 -translate-x-1/2 top-2">
+          <div style={{ ...panel, padding: '4px 10px', fontSize: 6, color: RED, background: '#2A1A1A', borderColor: RED }}>
+            DUNGEON T{dungeonTier}
+          </div>
+        </div>
+      )}
+
+      {/* ── Quest badge on QST button ── */}
+      {activeQuestCount > 0 && (
+        <div
+          className="pointer-events-none absolute right-2"
+          style={{ top: 150 + 5 * 36, fontSize: 4, color: CREAM, zIndex: 5 }}
+        >
+          <span style={{ background: RED, borderRadius: 3, padding: '1px 3px', position: 'relative', left: 26, top: -2 }}>
+            {activeQuestCount}
+          </span>
+        </div>
+      )}
+
       {/* ── Shop overlay ── */}
       {shopOpen && <ShopPanel engine={engine} />}
+
+      {/* ── Crafting overlay ── */}
+      <CraftingPanel engine={engine} />
+
+      {/* ── Quest overlay ── */}
+      <QuestPanel engine={engine} />
 
       {/* ── Controls hint (desktop only) ── */}
       <div
@@ -177,7 +229,7 @@ export default function HUD({ engine }: HUDProps) {
       >
         <div>WASD MOVE  SHIFT SPRINT</div>
         <div>SPACE ATK  E INTERACT</div>
-        <div>Q/R ABIL   SCROLL ZOOM</div>
+        <div>Q SPELL  C CRAFT  J QUEST</div>
       </div>
     </div>
   )

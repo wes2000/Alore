@@ -2,11 +2,12 @@ import * as THREE from 'three'
 import {
   PlayerState, SkillType, BiomeType,
   ResourceNodeType, ResourceNodeState, InventoryItem, MobInstance,
-  TileType,
+  TileType, Equipment, StatusEffect, Element, ActiveStatusEffect,
 } from './data/types'
 import { createDefaultPlayer } from '../db/gameDB'
 import { ChunkSystem, worldToChunkLocal } from './world/ChunkSystem'
 import { CHUNK_SIZE } from './world/BiomeMap'
+import { isDungeonFloor } from './world/DungeonGenerator'
 import { SceneRenderer } from './renderer/SceneRenderer'
 import { ChunkRenderer } from './renderer/ChunkRenderer'
 import { EntityRenderer, HealthBarRenderer } from './renderer/EntityRenderer'
@@ -18,12 +19,17 @@ import { SkillSystem } from './systems/SkillSystem'
 import { PetSystem } from './systems/PetSystem'
 import { CombatSystem } from './systems/CombatSystem'
 import { TamingSystem } from './systems/TamingSystem'
+import { CraftingSystem } from './systems/CraftingSystem'
+import { QuestSystem } from './systems/QuestSystem'
+import { StatusEffectSystem } from './systems/StatusEffectSystem'
+import { SpellSystem } from './systems/SpellSystem'
 import { MobSpawner } from './world/MobSpawner'
 import { GatheringSystem, NODE_RESPAWN_MS } from './systems/GatheringSystem'
 import { MOB_DEFINITIONS } from './data/mobs'
 import { ITEM_DEFINITIONS } from './data/items'
 import { XP_AWARDS } from './data/skills'
 import { ABILITIES } from './data/abilities'
+import { SPELLS } from './data/spells'
 import { BIOME_DEFINITIONS, TILE_IMPASSABLE } from './data/biomes'
 import { SHOP_BUY_ITEMS, SHOP_NPC_X, SHOP_NPC_Y, SHOP_INTERACT_RANGE, SELL_RATIO } from './data/shop'
 
@@ -63,6 +69,10 @@ export class GameEngine {
   petSystem: PetSystem
   combatSystem: CombatSystem
   tamingSystem: TamingSystem
+  craftingSystem: CraftingSystem
+  questSystem!: QuestSystem
+  statusEffectSystem: StatusEffectSystem
+  spellSystem: SpellSystem
   private mobSpawner: MobSpawner
   private gatheringSystem: GatheringSystem
 
@@ -119,6 +129,9 @@ export class GameEngine {
     this.petSystem    = new PetSystem(this.playerState)
     this.combatSystem = new CombatSystem()
     this.tamingSystem = new TamingSystem(this.playerState, this.petSystem, this.skillSystem)
+    this.craftingSystem = new CraftingSystem(this.playerState, this.skillSystem)
+    this.statusEffectSystem = new StatusEffectSystem()
+    this.spellSystem = new SpellSystem(this.playerState, this.skillSystem)
     this.mobSpawner   = new MobSpawner(this.playerState.worldSeed)
     this.gatheringSystem = new GatheringSystem(
       this.playerState,
@@ -145,6 +158,19 @@ export class GameEngine {
       this.chunkSystem = new ChunkSystem(this.playerState.worldSeed)
       this.mobSpawner  = new MobSpawner(this.playerState.worldSeed)
     }
+
+    // Ensure new fields have defaults for old saves
+    if (!this.playerState.equipment) this.playerState.equipment = { weapon: null, offhand: null, body: null }
+    if (!this.playerState.activeQuests) this.playerState.activeQuests = []
+    if (!this.playerState.currentDungeon) this.playerState.currentDungeon = null
+    if (!this.playerState.playerStatusEffects) this.playerState.playerStatusEffects = []
+    if (this.playerState.equippedSpellIndex == null) this.playerState.equippedSpellIndex = 0
+    if (!this.playerState.combatStyle) this.playerState.combatStyle = 'melee'
+    if (this.playerState.comboHitCount == null) this.playerState.comboHitCount = 0
+    if (this.playerState.lastComboTime == null) this.playerState.lastComboTime = 0
+
+    // Initialize quest system (must be after player state is loaded)
+    this.questSystem = new QuestSystem(this.playerState, this.skillSystem)
 
     // Add player entity
     this.entityRenderer.addEntity(
@@ -192,18 +218,57 @@ export class GameEngine {
     })
 
     // Mob attacks player
-    eventBus.on('mob:attack_player', ({ damage }) => {
+    eventBus.on('mob:attack_player', ({ mobId, damage }) => {
       const p = this.playerState
       const defLevel = this.skillSystem.getSkillLevel(SkillType.Defense)
-      const reduction = Math.floor(defLevel * 0.4)
-      const reduced = Math.max(1, damage - reduction)
+      const flatReduction = Math.floor(defLevel * 0.4)
+      // Equipment DEF from shield + body
+      const equipDef = this.skillSystem.getPlayerDEF()
+      let reduced = Math.max(1, damage - flatReduction - equipDef)
+
+      // Apply milestone damage reduction (Defense 30/60/70+)
+      const milestoneReduction = this.skillSystem.getDamageReduction()
+      reduced = Math.floor(reduced * (1 - milestoneReduction))
+
+      // Indomitable (Vitality 60): 20% less damage below 25% HP
+      const indomReduction = this.skillSystem.getIndomitableReduction()
+      reduced = Math.floor(reduced * (1 - indomReduction))
+
+      reduced = Math.max(1, reduced)
       p.hp = Math.max(0, p.hp - reduced)
+
+      // Award Defense/Vitality XP on hit
+      this.skillSystem.awardXP(SkillType.Defense, 2)
+      this.skillSystem.awardXP(SkillType.Vitality, 1.5)
+
+      // Apply status effects from mob's element
+      const mob = Array.from(this.mobSpawner.mobValues()).find(m => m.id === mobId)
+      if (mob && mob.element && mob.element !== Element.None) {
+        const statusMap: Partial<Record<Element, StatusEffect>> = {
+          [Element.Fire]: StatusEffect.Burn,
+          [Element.Water]: StatusEffect.Slow,
+          [Element.Shadow]: StatusEffect.Weaken,
+        }
+        const status = statusMap[mob.element]
+        if (status && Math.random() < 0.3) {
+          if (!p.playerStatusEffects) p.playerStatusEffects = []
+          p.playerStatusEffects = p.playerStatusEffects.filter(s => s.type !== status)
+          const power = status === StatusEffect.Burn ? 8 : 1
+          p.playerStatusEffects.push({ type: status, duration: 4, power, sourceId: mob.id })
+          eventBus.emit('ui:notification', {
+            message: `${status} applied!`,
+            type: 'danger',
+          })
+        }
+      }
+
       this.entityRenderer.flash('player', 0xff2222, 200)
       this.forceEmitPlayerHP()
       if (p.hp <= 0) {
         eventBus.emit('ui:notification', { message: 'You were defeated!', type: 'danger' })
         p.hp = Math.max(1, Math.floor(p.maxHp * 0.5))
         p.x = 16; p.y = 16
+        p.playerStatusEffects = []
         this.forceEmitPlayerHP()
         eventBus.emit('ui:notification', { message: 'Respawned at starting area.', type: 'warning' })
       }
@@ -242,10 +307,21 @@ export class GameEngine {
     this.updatePlayer(dt)
     this.updatePets(dt)
     this.combatSystem.tick()
+    this.spellSystem.update(dt)
 
     this.playerAttackCooldown = Math.max(0, this.playerAttackCooldown - dt)
     this.mobSpawner.update(dt, this.playerState.x, this.playerState.y)
     this.gatheringSystem.update(dt)
+
+    // Tick mob status effects
+    this.tickMobStatusEffects(dt)
+    // Tick player status effects
+    this.tickPlayerStatusEffects(dt)
+
+    // Handle spell cycling (Q key)
+    if (this.inputSystem.wasJustPressed('ability1')) {
+      this.spellSystem.cycleSpell()
+    }
 
     this.handlePlayerAttack()
     this.handleInteract()
@@ -433,9 +509,50 @@ export class GameEngine {
     if (this.playerAttackCooldown > 0) return
 
     const p = this.playerState
-    const mob = this.mobSpawner.getMobAt(p.x + 0.5, p.y + 0.5, PLAYER_ATTACK_RANGE)
+    const weapon = p.equipment?.weapon ? ITEM_DEFINITIONS[p.equipment.weapon] : null
 
-    this.playerAttackCooldown = PLAYER_ATTACK_COOLDOWN
+    // Determine combat style and range
+    const weaponStyle = weapon?.weaponStyle ?? 'melee'
+    const atkRange = weapon?.atkRange ?? PLAYER_ATTACK_RANGE
+    p.combatStyle = weaponStyle === 'staff' ? 'magic' : weaponStyle === 'bow' ? 'ranged' : 'melee'
+
+    // Staff attack: cast current spell
+    if (weaponStyle === 'staff') {
+      this.handleStaffAttack(atkRange)
+      return
+    }
+
+    // Bow attack: ranged projectile
+    if (weaponStyle === 'bow') {
+      this.handleBowAttack(atkRange)
+      return
+    }
+
+    // Melee attack
+    const mob = this.mobSpawner.getMobAt(p.x + 0.5, p.y + 0.5, atkRange)
+
+    // Check melee combo tracker (Melee 30: Swordsman)
+    const meleeLvl = this.skillSystem.getSkillLevel(SkillType.Melee)
+    const now = performance.now()
+    if (meleeLvl >= 30 && (now - p.lastComboTime) < 1500) {
+      p.comboHitCount++
+      if (p.comboHitCount >= 3) {
+        // Free third hit: no cooldown
+        p.comboHitCount = 0
+        this.playerAttackCooldown = 0
+      } else {
+        this.playerAttackCooldown = PLAYER_ATTACK_COOLDOWN
+      }
+    } else {
+      p.comboHitCount = 1
+      this.playerAttackCooldown = PLAYER_ATTACK_COOLDOWN
+    }
+    p.lastComboTime = now
+
+    // Blade Dancer (Melee 50): 10% chance to skip cooldown
+    if (Math.random() < this.skillSystem.getBladeDanceChance()) {
+      this.playerAttackCooldown = 0
+    }
 
     // Slash effect: on mob → at mob, otherwise in front of player
     if (mob) {
@@ -453,8 +570,9 @@ export class GameEngine {
       return
     }
 
-    const meleeLvl = this.skillSystem.getSkillLevel(SkillType.Melee)
-    const damage = Math.max(1, PLAYER_ATTACK_BASE_DMG + (meleeLvl - 1) * 2 - mob.def)
+    // Calculate damage with equipped weapon bonus
+    const weaponAtk = weapon?.statBonus?.atk ?? 0
+    const damage = Math.max(1, PLAYER_ATTACK_BASE_DMG + (meleeLvl - 1) * 2 + weaponAtk - mob.def)
 
     const result = this.mobSpawner.damageMob(mob.id, damage)
     if (!result) return
@@ -462,7 +580,147 @@ export class GameEngine {
     this.entityRenderer.flash(`mob_${mob.id}`, 0xff4444, 120)
     this.skillSystem.awardXP(SkillType.Melee, 4)
 
+    // Knockback (Melee 20: Warrior)
+    if (Math.random() < this.skillSystem.getKnockbackChance()) {
+      const dx = mob.x - p.x
+      const dy = mob.y - p.y
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      if (dist > 0) {
+        mob.x += (dx / dist)
+        mob.y += (dy / dist)
+      }
+    }
+
     if (result.state === 'dead') {
+      this.onMobDied(result)
+    }
+  }
+
+  private handleStaffAttack(range: number): void {
+    const p = this.playerState
+    const spell = this.spellSystem.getCurrentSpell()
+    if (!spell) {
+      // Fallback: basic arcane bolt
+      this.playerAttackCooldown = PLAYER_ATTACK_COOLDOWN
+      return
+    }
+
+    const castResult = this.spellSystem.cast(spell.id)
+    if (!castResult) {
+      this.playerAttackCooldown = 0.3
+      return
+    }
+
+    this.playerAttackCooldown = castResult.cooldown
+
+    // Find target within spell range
+    const mob = this.mobSpawner.getMobAt(p.x + 0.5, p.y + 0.5, castResult.range)
+    if (!mob) {
+      const dirOffsets: Record<string, { x: number; y: number }> = {
+        right: { x: 1, y: 0 }, left: { x: -1, y: 0 },
+        down:  { x: 0, y: 1 }, up:   { x: 0,  y: -1 },
+      }
+      const off = dirOffsets[this.playerDir] ?? { x: 0, y: 1 }
+      this.entityRenderer.spawnAttackEffect(
+        p.x + 0.5 + off.x * castResult.range * 0.5,
+        p.y + 0.5 + off.y * castResult.range * 0.5,
+      )
+      return
+    }
+
+    const damage = this.spellSystem.calculateDamage(castResult)
+    const defStat = mob.mdef ?? mob.def
+    const finalDmg = Math.max(1, damage - Math.floor(defStat * 0.3))
+    const result = this.mobSpawner.damageMob(mob.id, finalDmg)
+
+    this.entityRenderer.spawnAttackEffect(mob.x + 0.5, mob.y + 0.5)
+    if (result) this.entityRenderer.flash(`mob_${mob.id}`, 0x8844ff, 120)
+
+    // Apply element to target (for combo reactions)
+    if (castResult.element !== Element.None) {
+      this.combatSystem.applyElement(mob.id, castResult.element, 'player', { x: mob.x, y: mob.y })
+    }
+
+    // Apply status effect
+    if (castResult.statusEffect && Math.random() < (castResult.statusChance ?? 0)) {
+      const power = castResult.statusEffect === StatusEffect.Burn ? 8 : 1
+      this.statusEffectSystem.applyToMob(mob, castResult.statusEffect, castResult.statusDuration ?? 3, power, 'player')
+    }
+
+    // AoE damage
+    if (castResult.aoeRadius > 0) {
+      for (const aoeMob of this.mobSpawner.allMobs) {
+        if (aoeMob.id === mob.id || aoeMob.state === 'dead') continue
+        const dist = Math.sqrt((aoeMob.x - mob.x) ** 2 + (aoeMob.y - mob.y) ** 2)
+        if (dist <= castResult.aoeRadius) {
+          const aoeDmg = Math.max(1, Math.floor(finalDmg * 0.6))
+          this.mobSpawner.damageMob(aoeMob.id, aoeDmg)
+        }
+      }
+    }
+
+    if (result?.state === 'dead') {
+      this.onMobDied(result)
+    }
+  }
+
+  private handleBowAttack(range: number): void {
+    const p = this.playerState
+    const weapon = p.equipment?.weapon ? ITEM_DEFINITIONS[p.equipment.weapon] : null
+
+    // Check ammo
+    const isXbow = weapon?.id === 'crossbow'
+    const ammoId = isXbow ? 'crossbow_bolt' : 'feather'
+    const ammoItem = p.inventory.find(i => i.itemId === ammoId)
+    if (!ammoItem || ammoItem.quantity <= 0) {
+      eventBus.emit('ui:notification', { message: `No ${isXbow ? 'bolts' : 'feathers'}!`, type: 'warning' })
+      this.playerAttackCooldown = 0.3
+      return
+    }
+
+    // Consume ammo
+    ammoItem.quantity--
+    if (ammoItem.quantity <= 0) {
+      const idx = p.inventory.indexOf(ammoItem)
+      if (idx !== -1) p.inventory.splice(idx, 1)
+    }
+
+    this.playerAttackCooldown = PLAYER_ATTACK_COOLDOWN
+
+    const mob = this.mobSpawner.getMobAt(p.x + 0.5, p.y + 0.5, range)
+    if (!mob) {
+      const dirOffsets: Record<string, { x: number; y: number }> = {
+        right: { x: 1, y: 0 }, left: { x: -1, y: 0 },
+        down:  { x: 0, y: 1 }, up:   { x: 0,  y: -1 },
+      }
+      const off = dirOffsets[this.playerDir] ?? { x: 0, y: 1 }
+      this.entityRenderer.spawnAttackEffect(
+        p.x + 0.5 + off.x * range * 0.5,
+        p.y + 0.5 + off.y * range * 0.5,
+      )
+      return
+    }
+
+    const rangedLvl = this.skillSystem.getSkillLevel(SkillType.Ranged)
+    const weaponAtk = weapon?.statBonus?.atk ?? 0
+    let baseDmg = Math.max(1, 8 + (rangedLvl - 1) * 2 + weaponAtk - mob.def)
+
+    // Distance bonus (Ranged 50: Sniper)
+    const dist = Math.sqrt((mob.x - p.x) ** 2 + (mob.y - p.y) ** 2)
+    baseDmg = Math.floor(baseDmg * (1 + this.skillSystem.getRangedDamageBonus(dist)))
+
+    // Headshot (Ranged 30: Sharpshooter)
+    if (Math.random() < this.skillSystem.getHeadshotChance()) {
+      baseDmg = Math.floor(baseDmg * 1.5)
+      eventBus.emit('ui:notification', { message: 'Headshot!', type: 'success' })
+    }
+
+    const result = this.mobSpawner.damageMob(mob.id, baseDmg)
+    this.entityRenderer.spawnAttackEffect(mob.x + 0.5, mob.y + 0.5)
+    if (result) this.entityRenderer.flash(`mob_${mob.id}`, 0x44ff44, 120)
+    this.skillSystem.awardXP(SkillType.Ranged, 4)
+
+    if (result?.state === 'dead') {
       this.onMobDied(result)
     }
   }
@@ -480,7 +738,35 @@ export class GameEngine {
       return
     }
 
-    // Priority 0: open shop if near the shopkeeper NPC
+    // Priority 0: dungeon entry/exit
+    const chunk = this.chunkSystem.getChunkAt(Math.floor(p.x), Math.floor(p.y))
+    if (chunk.dungeonData && !p.currentDungeon) {
+      // Check if standing on entrance room area
+      const lx = ((Math.floor(p.x) % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE
+      const ly = ((Math.floor(p.y) % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE
+      const entranceRoom = chunk.dungeonData.rooms.find(r => r.type === 'entrance')
+      if (entranceRoom && lx >= entranceRoom.x && lx < entranceRoom.x + entranceRoom.w &&
+          ly >= entranceRoom.y && ly < entranceRoom.y + entranceRoom.h) {
+        this.enterDungeon(`${chunk.cx}_${chunk.cy}`)
+        return
+      }
+    } else if (p.currentDungeon) {
+      // Check if at entrance to exit
+      const [dcxStr, dcyStr] = p.currentDungeon.split('_')
+      const dchunk = this.chunkSystem.getChunk(parseInt(dcxStr), parseInt(dcyStr))
+      if (dchunk.dungeonData) {
+        const lx = ((Math.floor(p.x) % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE
+        const ly = ((Math.floor(p.y) % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE
+        const entranceRoom = dchunk.dungeonData.rooms.find(r => r.type === 'entrance')
+        if (entranceRoom && lx >= entranceRoom.x && lx < entranceRoom.x + 2 &&
+            ly >= entranceRoom.y && ly < entranceRoom.y + 2) {
+          this.exitDungeon()
+          return
+        }
+      }
+    }
+
+    // Priority 0.5: open shop if near the shopkeeper NPC
     const shopDist = Math.hypot(p.x + 0.5 - (SHOP_NPC_X + 0.5), p.y + 0.5 - (SHOP_NPC_Y + 0.5))
     if (shopDist <= SHOP_INTERACT_RANGE) {
       eventBus.emit('shop:open', {})
@@ -518,6 +804,23 @@ export class GameEngine {
     }
 
     const p = this.playerState
+
+    // Check dungeon entrance
+    const chunk = this.chunkSystem.getChunkAt(Math.floor(p.x), Math.floor(p.y))
+    if (chunk.dungeonData && !p.currentDungeon) {
+      const lx = ((Math.floor(p.x) % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE
+      const ly = ((Math.floor(p.y) % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE
+      const entranceRoom = chunk.dungeonData.rooms.find(r => r.type === 'entrance')
+      if (entranceRoom && lx >= entranceRoom.x && lx < entranceRoom.x + entranceRoom.w &&
+          ly >= entranceRoom.y && ly < entranceRoom.y + entranceRoom.h) {
+        const label = `Enter Dungeon (Tier ${chunk.dungeonData.tier}) [E]`
+        if (label !== this.lastInteractLabel) {
+          this.lastInteractLabel = label
+          eventBus.emit('interact:nearby', { label })
+        }
+        return
+      }
+    }
 
     // Check shopkeeper NPC
     const shopDist = Math.hypot(p.x + 0.5 - (SHOP_NPC_X + 0.5), p.y + 0.5 - (SHOP_NPC_Y + 0.5))
@@ -631,11 +934,34 @@ export class GameEngine {
       }
     }
 
+    // Boss drops guaranteed equipment
+    if (mob.isBoss) {
+      const bossLoot = ['iron_sword', 'iron_shield', 'leather_chaps', 'iron_chainmail']
+      const lootId = bossLoot[Math.floor(Math.random() * bossLoot.length)]
+      this.addToInventory(lootId, 1)
+      eventBus.emit('ui:notification', { message: `Boss dropped: ${ITEM_DEFINITIONS[lootId]?.name}!`, type: 'success' })
+
+      // Notify dungeon clear
+      if (this.playerState.currentDungeon) {
+        const [dcxStr, dcyStr] = this.playerState.currentDungeon.split('_')
+        const dchunk = this.chunkSystem.getChunk(parseInt(dcxStr), parseInt(dcyStr))
+        this.onDungeonBossKilled(dchunk.dungeonData?.tier ?? 1)
+      }
+    }
+
     const xp = 10 + mob.level * 5
-    this.skillSystem.awardXP(SkillType.Melee, xp)
+    // Award XP to the active combat style
+    const p = this.playerState
+    if (p.combatStyle === 'magic') {
+      this.skillSystem.awardXP(SkillType.Magic, xp)
+    } else if (p.combatStyle === 'ranged') {
+      this.skillSystem.awardXP(SkillType.Ranged, xp)
+    } else {
+      this.skillSystem.awardXP(SkillType.Melee, xp)
+    }
 
     eventBus.emit('mob:died', { mobId: mob.id, x: mob.x, y: mob.y })
-    eventBus.emit('ui:notification', { message: `Defeated ${def.name}!`, type: 'info' })
+    eventBus.emit('ui:notification', { message: `Defeated ${mob.bossName ?? def.name}!`, type: 'info' })
   }
 
   private addToInventory(itemId: string, qty: number): void {
@@ -756,6 +1082,122 @@ export class GameEngine {
     this.chunkRenderer.removeChunksOutsideRadius(cx, cy, RENDER_RADIUS + 1)
   }
 
+  // ─── Status Effect Ticking ───────────────────────────────────────────────
+
+  private tickMobStatusEffects(dt: number): void {
+    for (const mob of this.mobSpawner.mobValues()) {
+      if (mob.state === 'dead') continue
+      const burnDmg = this.statusEffectSystem.tickMob(mob, dt)
+      if (burnDmg > 0) {
+        const result = this.mobSpawner.damageMob(mob.id, burnDmg)
+        if (result) {
+          this.entityRenderer.flash(`mob_${mob.id}`, 0xff6600, 100)
+          if (result.state === 'dead') this.onMobDied(result)
+        }
+      }
+      // Apply speed modifier to mob movement
+      const spdMult = this.statusEffectSystem.getSpeedMultiplier(mob)
+      if (spdMult === 0) mob.state = 'wander' // Stunned
+    }
+  }
+
+  private tickPlayerStatusEffects(dt: number): void {
+    const p = this.playerState
+    if (!p.playerStatusEffects || p.playerStatusEffects.length === 0) return
+
+    p.playerStatusEffects = p.playerStatusEffects.filter(effect => {
+      effect.duration -= dt
+      if (effect.type === StatusEffect.Burn) {
+        const dmg = Math.floor(effect.power * dt)
+        if (dmg > 0) {
+          p.hp = Math.max(0, p.hp - dmg)
+          this.entityRenderer.flash('player', 0xff4400, 80)
+          this.forceEmitPlayerHP()
+        }
+      }
+      return effect.duration > 0
+    })
+  }
+
+  // ─── Equipment ─────────────────────────────────────────────────────────
+
+  equipItem(itemId: string): { success: boolean; message: string } {
+    const def = ITEM_DEFINITIONS[itemId]
+    if (!def || !def.equipSlot) return { success: false, message: 'Cannot equip this item' }
+
+    // Check skill requirement
+    if (def.skillReq && !this.skillSystem.meetsRequirement(def.skillReq.skill, def.skillReq.level)) {
+      return { success: false, message: `Need ${def.skillReq.skill} level ${def.skillReq.level}` }
+    }
+
+    // Check if player has the item
+    const invItem = this.playerState.inventory.find(i => i.itemId === itemId)
+    if (!invItem) return { success: false, message: 'Item not in inventory' }
+
+    // Unequip current item in that slot
+    const slot = def.equipSlot
+    const currentEquipped = this.playerState.equipment[slot]
+    if (currentEquipped) {
+      this.addToInventory(currentEquipped, 1)
+    }
+
+    // Remove from inventory
+    invItem.quantity--
+    if (invItem.quantity <= 0) {
+      const idx = this.playerState.inventory.indexOf(invItem)
+      if (idx !== -1) this.playerState.inventory.splice(idx, 1)
+    }
+
+    // Equip
+    this.playerState.equipment[slot] = itemId
+
+    // Update combat style
+    if (slot === 'weapon') {
+      this.playerState.combatStyle = def.weaponStyle === 'staff' ? 'magic' : def.weaponStyle === 'bow' ? 'ranged' : 'melee'
+    }
+
+    eventBus.emit('ui:notification', { message: `Equipped ${def.name}!`, type: 'success' })
+    return { success: true, message: `Equipped ${def.name}` }
+  }
+
+  unequipItem(slot: 'weapon' | 'offhand' | 'body'): { success: boolean; message: string } {
+    const itemId = this.playerState.equipment[slot]
+    if (!itemId) return { success: false, message: 'Nothing equipped' }
+
+    this.playerState.equipment[slot] = null
+    this.addToInventory(itemId, 1)
+
+    if (slot === 'weapon') this.playerState.combatStyle = 'melee'
+
+    const def = ITEM_DEFINITIONS[itemId]
+    eventBus.emit('ui:notification', { message: `Unequipped ${def?.name ?? itemId}`, type: 'info' })
+    return { success: true, message: `Unequipped ${def?.name ?? itemId}` }
+  }
+
+  // ─── Dungeon Entry/Exit ────────────────────────────────────────────────
+
+  enterDungeon(chunkKey: string): void {
+    this.playerState.currentDungeon = chunkKey
+    const [cxStr, cyStr] = chunkKey.split('_')
+    const cx = parseInt(cxStr), cy = parseInt(cyStr)
+    const chunk = this.chunkSystem.getChunk(cx, cy)
+    const tier = chunk.dungeonData?.tier ?? 1
+    eventBus.emit('world:dungeon_entered', { tier })
+    eventBus.emit('ui:notification', { message: `Entered dungeon (Tier ${tier})`, type: 'warning' })
+  }
+
+  exitDungeon(): void {
+    this.playerState.currentDungeon = null
+    eventBus.emit('ui:notification', { message: 'Exited dungeon', type: 'info' })
+  }
+
+  onDungeonBossKilled(tier: number): void {
+    const activePetDefIds = this.petSystem.activePets.map(p => p.definitionId)
+    this.questSystem.onDungeonCleared(tier, activePetDefIds)
+    eventBus.emit('world:dungeon_cleared', {})
+    eventBus.emit('ui:notification', { message: `Dungeon cleared! (Tier ${tier})`, type: 'success' })
+  }
+
   // ─── Render (interpolated) ───────────────────────────────────────────────
 
   private render(alpha: number): void {
@@ -841,14 +1283,11 @@ export class GameEngine {
 
   /** Derived combat/progression stats for the HUD. */
   getComputedStats(): { atk: number; def: number; maxHp: number; maxEnergy: number } {
-    const p = this.playerState
-    const meleeLvl = this.skillSystem.getSkillLevel(SkillType.Melee)
-    const defLvl   = this.skillSystem.getSkillLevel(SkillType.Defense)
     return {
-      atk:       PLAYER_ATTACK_BASE_DMG + (meleeLvl - 1) * 2,
-      def:       Math.floor(defLvl * 0.4),
-      maxHp:     p.maxHp,
-      maxEnergy: p.maxEnergy,
+      atk:       this.skillSystem.getPlayerATK(),
+      def:       this.skillSystem.getPlayerDEF(),
+      maxHp:     this.playerState.maxHp,
+      maxEnergy: this.playerState.maxEnergy,
     }
   }
 
@@ -894,6 +1333,9 @@ function getPetColor(defId: string): string {
     storm_eagle:    '#c8c820',
     cinderwyrm:     '#c02000',
     void_leviathan: '#3a1a5a',
+    titan_golem:    '#5a5a4a',
+    thunder_roc:    '#e8d020',
+    phantom_wolf:   '#4a2a7a',
   }
   return colors[defId] ?? '#888888'
 }
