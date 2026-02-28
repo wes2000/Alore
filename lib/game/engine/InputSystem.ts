@@ -77,6 +77,7 @@ export class InputSystem {
   private justPressed = new Set<keyof InputState>()
   private attached = false
   private canvas: HTMLElement | null = null
+  private joystick = { x: 0, y: 0 }
 
   attach(canvas: HTMLElement): void {
     if (this.attached) return
@@ -145,6 +146,23 @@ export class InputSystem {
     e.preventDefault()
   }
 
+  /** Set virtual joystick vector from mobile controls (values in -1..1) */
+  setJoystickVector(x: number, y: number): void {
+    this.joystick.x = x
+    this.joystick.y = y
+  }
+
+  /** Set a boolean input action from mobile controls */
+  setMobileButton(action: keyof InputState, pressed: boolean): void {
+    const cur = (this.state as unknown as Record<string, boolean>)[action]
+    if (pressed && !cur) {
+      (this.state as unknown as Record<string, boolean>)[action] = true
+      this.justPressed.add(action)
+    } else if (!pressed) {
+      (this.state as unknown as Record<string, boolean>)[action] = false
+    }
+  }
+
   /** Update mouse world position (set by renderer each frame) */
   setMouseWorldPosition(wx: number, wy: number): void {
     this.state.mouseWorldX = wx
@@ -161,8 +179,11 @@ export class InputSystem {
     return this.justPressed.has(action)
   }
 
-  /** Get movement direction vector (normalized) */
+  /** Get movement direction vector (normalized). Joystick takes priority over keyboard. */
   getMoveVector(): { x: number; y: number } {
+    if (this.joystick.x !== 0 || this.joystick.y !== 0) {
+      return { x: this.joystick.x, y: this.joystick.y }
+    }
     let x = 0, y = 0
     if (this.state.moveLeft)  x -= 1
     if (this.state.moveRight) x += 1

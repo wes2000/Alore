@@ -54,7 +54,7 @@ export class GameEngine {
   private entityRenderer: EntityRenderer
   private healthBars: HealthBarRenderer
   private gameLoop: GameLoop
-  private inputSystem: InputSystem
+  inputSystem: InputSystem
 
   // Systems
   skillSystem: SkillSystem
