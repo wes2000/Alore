@@ -41,17 +41,17 @@ export default function MobileControls({ engine }: Props) {
       className="pointer-events-none absolute inset-0 select-none"
       style={{ touchAction: 'none', ...PIXEL_FONT }}
     >
-      {/* Left side: ability/action buttons */}
-      <LeftButtons engine={engine} />
-
-      {/* Right side: D-pad + sprint */}
+      {/* Left side: D-pad + sprint */}
       <DPad engine={engine} />
       <RunButton engine={engine} />
+
+      {/* Right side: ability/action buttons */}
+      <RightButtons engine={engine} />
     </div>
   )
 }
 
-// ── D-Pad (bottom-right) ──────────────────────────────────────────────────────
+// ── D-Pad (bottom-left) ───────────────────────────────────────────────────────
 function DPad({ engine }: { engine: GameEngine }) {
   const [vec, setVec] = useState({ x: 0, y: 0 })
   const activeId = useRef<number | null>(null)
@@ -104,7 +104,7 @@ function DPad({ engine }: { engine: GameEngine }) {
   return (
     <div
       className="pointer-events-auto absolute"
-      style={{ bottom: 100, right: 10, width: ARM * 3, height: ARM * 3, touchAction: 'none' }}
+      style={{ bottom: 100, left: 10, width: ARM * 3, height: ARM * 3, touchAction: 'none' }}
       onPointerDown={onDown}
       onPointerMove={onMove}
       onPointerUp={onUp}
@@ -135,7 +135,7 @@ function RunButton({ engine }: { engine: GameEngine }) {
       className="pointer-events-auto absolute"
       style={{
         bottom: 100 + ARM * 3 + 6,  // sits directly above the up-arm
-        right: 10 + ARM,            // aligned with center arm
+        left: 10 + ARM,             // aligned with D-pad center column
         width: ARM,
         height: 26,
         background: on ? GB.runOn : GB.runOff,
@@ -156,12 +156,12 @@ function RunButton({ engine }: { engine: GameEngine }) {
   )
 }
 
-// ── Left-side action buttons ──────────────────────────────────────────────────
-function LeftButtons({ engine }: { engine: GameEngine }) {
+// ── Right-side action buttons ─────────────────────────────────────────────────
+function RightButtons({ engine }: { engine: GameEngine }) {
   return (
     <div
-      className="pointer-events-auto absolute flex flex-col items-start"
-      style={{ bottom: 100, left: 10, gap: 10 }}
+      className="pointer-events-auto absolute flex flex-col items-end"
+      style={{ bottom: 100, right: 10, gap: 10 }}
     >
       {/* Row 1: Q · R (ability buttons) */}
       <div style={{ display: 'flex', gap: 10 }}>

@@ -62,6 +62,8 @@ export default function GameCanvas() {
       eventBus.on('gather:progress',       ({ progress })     => store.setGatherProgress(progress)),
       eventBus.on('gather:complete',       ()                 => { store.setGatherProgress(null); store.setGatherNodeType(null) }),
       eventBus.on('gather:cancel',         ()                 => { store.setGatherProgress(null); store.setGatherNodeType(null) }),
+      eventBus.on('shop:open',             ()                 => store.setShopOpen(true)),
+      eventBus.on('shop:close',            ()                 => store.setShopOpen(false)),
       eventBus.on('save:requested', async () => {
         const engine = engineRef.current
         if (!engine) return

@@ -32,6 +32,7 @@ interface GameStore {
   // UI state
   activePanel: 'skills' | 'pets' | 'inventory' | 'map' | null
   notifications: Notification[]
+  shopOpen: boolean
 
   // Actions
   setPlayerHP:    (hp: number, max: number) => void
@@ -46,6 +47,7 @@ interface GameStore {
   setGatherNodeType: (nodeType: string | null) => void
   setPanel:       (panel: GameStore['activePanel']) => void
   togglePanel:    (panel: 'skills' | 'pets' | 'inventory' | 'map') => void
+  setShopOpen:    (open: boolean) => void
   addNotification:(message: string, type: Notification['type']) => void
   removeNotification:(id: string) => void
   clearExpiredNotifications:() => void
@@ -68,6 +70,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   gatherNodeType: null,
   activePanel:    null,
   notifications:  [],
+  shopOpen:       false,
 
   setPlayerHP:       (hp, max)    => set({ playerHP: hp, playerMaxHP: max }),
   setPlayerEnergy:   (energy, max)=> set({ playerEnergy: energy, playerMaxEnergy: max }),
@@ -84,6 +87,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   togglePanel: (panel) => set(s => ({
     activePanel: s.activePanel === panel ? null : panel,
   })),
+  setShopOpen: (open) => set({ shopOpen: open }),
 
   addNotification: (message, type) => {
     const id = Math.random().toString(36).slice(2)

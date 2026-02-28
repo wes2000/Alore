@@ -5,6 +5,7 @@ import { BiomeType } from '@/lib/game/data/types'
 import { BIOME_DEFINITIONS } from '@/lib/game/data/biomes'
 import { GameEngine } from '@/lib/game/GameEngine'
 import Minimap from './Minimap'
+import ShopPanel from './ShopPanel'
 
 const CREAM  = '#F0E8C8'
 const BLACK  = '#181818'
@@ -37,7 +38,7 @@ export default function HUD({ engine }: HUDProps) {
     playerGold, currentBiome, fps,
     activePanel, togglePanel, notifications,
     interactPrompt, gatherProgress, gatherNodeType,
-    playerATK, playerDEF,
+    playerATK, playerDEF, shopOpen,
   } = useGameStore()
 
   const hpPct     = Math.max(0, playerHP / Math.max(1, playerMaxHP))
@@ -134,17 +135,11 @@ export default function HUD({ engine }: HUDProps) {
         })}
       </div>
 
-      {/* ── Interact Prompt ── */}
-      {interactPrompt && (
-        <div className="absolute bottom-24 left-1/2 -translate-x-1/2">
-          <div style={{ ...panel, padding: '6px 12px', fontSize: 6 }}>
-            ▶ {interactPrompt}
-          </div>
-        </div>
-      )}
-
-      {/* ── Notifications (bottom-left, above mobile controls) ── */}
-      <div className="absolute left-2 flex flex-col gap-1.5 items-start" style={{ bottom: 280, maxWidth: 200 }}>
+      {/* ── Notifications (top-center, below HUD panels) ── */}
+      <div
+        className="absolute left-1/2 -translate-x-1/2 flex flex-col gap-1.5 items-center"
+        style={{ top: 130, maxWidth: 240, zIndex: 10, pointerEvents: 'none' }}
+      >
         {notifications.map(n => (
           <div
             key={n.id}
@@ -155,12 +150,25 @@ export default function HUD({ engine }: HUDProps) {
               fontSize: 6,
               lineHeight: '12px',
               borderLeft: `5px solid ${notifAccent(n.type)}`,
+              whiteSpace: 'nowrap',
             }}
           >
             {n.message}
           </div>
         ))}
       </div>
+
+      {/* ── Interact Prompt (above mobile controls) ── */}
+      {interactPrompt && (
+        <div className="absolute left-1/2 -translate-x-1/2" style={{ bottom: 265 }}>
+          <div style={{ ...panel, padding: '6px 12px', fontSize: 6 }}>
+            ▶ {interactPrompt}
+          </div>
+        </div>
+      )}
+
+      {/* ── Shop overlay ── */}
+      {shopOpen && <ShopPanel engine={engine} />}
 
       {/* ── Controls hint (desktop only) ── */}
       <div
