@@ -27,6 +27,7 @@ interface GameStore {
   // Interaction / gathering prompts
   interactPrompt: string | null
   gatherProgress: number | null   // 0–1 while gathering, null when idle
+  gatherNodeType: string | null   // e.g. "OakTree", shown during gathering
 
   // UI state
   activePanel: 'skills' | 'pets' | 'inventory' | 'map' | null
@@ -42,6 +43,7 @@ interface GameStore {
   setPlayerStats:    (atk: number, def: number) => void
   setInteractPrompt: (label: string | null) => void
   setGatherProgress: (progress: number | null) => void
+  setGatherNodeType: (nodeType: string | null) => void
   setPanel:       (panel: GameStore['activePanel']) => void
   togglePanel:    (panel: 'skills' | 'pets' | 'inventory' | 'map') => void
   addNotification:(message: string, type: Notification['type']) => void
@@ -63,6 +65,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   playerDEF:      0,
   interactPrompt: null,
   gatherProgress: null,
+  gatherNodeType: null,
   activePanel:    null,
   notifications:  [],
 
@@ -75,6 +78,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setPlayerStats:    (atk, def)   => set({ playerATK: atk, playerDEF: def }),
   setInteractPrompt: (label)      => set({ interactPrompt: label }),
   setGatherProgress: (progress)   => set({ gatherProgress: progress }),
+  setGatherNodeType: (nodeType)   => set({ gatherNodeType: nodeType }),
 
   setPanel: (panel) => set({ activePanel: panel }),
   togglePanel: (panel) => set(s => ({

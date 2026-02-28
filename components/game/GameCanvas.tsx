@@ -58,9 +58,10 @@ export default function GameCanvas() {
         const { atk, def } = engine.getComputedStats()
         store.setPlayerStats(atk, def)
       }),
+      eventBus.on('gather:start',          ({ nodeType })     => store.setGatherNodeType(nodeType)),
       eventBus.on('gather:progress',       ({ progress })     => store.setGatherProgress(progress)),
-      eventBus.on('gather:complete',       ()                 => store.setGatherProgress(null)),
-      eventBus.on('gather:cancel',         ()                 => store.setGatherProgress(null)),
+      eventBus.on('gather:complete',       ()                 => { store.setGatherProgress(null); store.setGatherNodeType(null) }),
+      eventBus.on('gather:cancel',         ()                 => { store.setGatherProgress(null); store.setGatherNodeType(null) }),
       eventBus.on('save:requested', async () => {
         const engine = engineRef.current
         if (!engine) return
