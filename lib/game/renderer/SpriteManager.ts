@@ -55,6 +55,9 @@ export class SpriteManager {
   private _playerTexture: THREE.Texture | null = null
   private loaded = 0
   private readonly total = 4
+  // Cache last-applied frame to skip redundant GPU texture uploads
+  private _lastDir: PlayerDirection | null = null
+  private _lastFrame = -1
 
   get ready(): boolean { return this.loaded >= this.total }
   get playerTexture(): THREE.Texture | null { return this._playerTexture }
@@ -110,6 +113,11 @@ export class SpriteManager {
    * Call this whenever direction or frame changes.
    */
   applyPlayerFrame(texture: THREE.Texture, direction: PlayerDirection, frame: number): void {
+    // Skip when nothing has changed — avoids a GPU texture upload every frame
+    if (direction === this._lastDir && frame === this._lastFrame) return
+    this._lastDir   = direction
+    this._lastFrame = frame
+
     const row = PLAYER_DIR_ROW[direction]
     const col = frame % PLAYER_WALK_FRAMES
     texture.repeat.set(1 / PLAYER_COLS, 1 / PLAYER_ROWS)

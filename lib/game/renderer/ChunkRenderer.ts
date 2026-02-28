@@ -81,9 +81,6 @@ export class ChunkRenderer {
     this.scene.add(mesh)
     this.meshes.set(k, mesh)
     this.textures.set(k, texture)
-
-    // Add resource node overlays
-    this.addNodeOverlays(chunk)
   }
 
   removeChunk(cx: number, cy: number): void {
@@ -98,8 +95,6 @@ export class ChunkRenderer {
     }
     this.textures.get(k)?.dispose()
     this.textures.delete(k)
-    // Remove node overlay meshes
-    this.removeNodeOverlays(cx, cy)
   }
 
   refreshChunk(chunk: ChunkState): void {
@@ -167,41 +162,20 @@ export class ChunkRenderer {
       }
     }
     ctx.globalAlpha = 1
-  }
 
-  // ─── Resource Node Overlays ────────────────────────────────────────────────
-  private nodeOverlaysByChunk = new Map<string, THREE.Mesh[]>()
-
-  private addNodeOverlays(chunk: ChunkState): void {
-    const k = this.key(chunk.cx, chunk.cy)
-    const overlays: THREE.Mesh[] = []
-
+    // Paint resource node markers directly onto the texture — eliminates
+    // hundreds of separate overlay meshes from the scene graph.
+    const margin = Math.round(CANVAS_TILE_PX * 0.18)
+    const size   = CANVAS_TILE_PX - margin * 2
     for (const node of chunk.resourceNodes) {
       if (node.depleted) continue
-      const color = getNodeColor(node.type)
-      const geo = new THREE.PlaneGeometry(0.6, 0.6)
-      const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85 })
-      const mesh = new THREE.Mesh(geo, mat)
-      const wx = chunk.cx * CHUNK_SIZE + node.localX + 0.5
-      const wy = -(chunk.cy * CHUNK_SIZE + node.localY + 0.5)
-      mesh.position.set(wx, wy, 0.1)
-      this.scene.add(mesh)
-      overlays.push(mesh)
-    }
-
-    this.nodeOverlaysByChunk.set(k, overlays)
-  }
-
-  private removeNodeOverlays(cx: number, cy: number): void {
-    const k = this.key(cx, cy)
-    const overlays = this.nodeOverlaysByChunk.get(k)
-    if (overlays) {
-      for (const mesh of overlays) {
-        this.scene.remove(mesh)
-        ;(mesh.material as THREE.Material).dispose()
-        mesh.geometry.dispose()
-      }
-      this.nodeOverlaysByChunk.delete(k)
+      const px = node.localX * CANVAS_TILE_PX
+      const py = node.localY * CANVAS_TILE_PX
+      ctx.fillStyle = numToHex(getNodeColor(node.type))
+      ctx.fillRect(px + margin, py + margin, size, size)
+      ctx.strokeStyle = 'rgba(0,0,0,0.45)'
+      ctx.lineWidth = 1
+      ctx.strokeRect(px + margin + 0.5, py + margin + 0.5, size - 1, size - 1)
     }
   }
 

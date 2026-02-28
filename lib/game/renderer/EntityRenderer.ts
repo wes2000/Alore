@@ -55,18 +55,11 @@ export class EntityRenderer {
       return
     }
 
-    // Body mesh
+    // Body mesh — single draw call per entity (border removed to halve draw calls)
     const geo = new THREE.PlaneGeometry(size, size)
     const mat = new THREE.MeshBasicMaterial({ color, transparent: false })
     const mesh = new THREE.Mesh(geo, mat)
     mesh.position.set(x + 0.5, -(y + 0.5), 0.5)
-
-    // Accent border via slightly larger mesh behind
-    const borderGeo = new THREE.PlaneGeometry(size + 0.1, size + 0.1)
-    const borderMat = new THREE.MeshBasicMaterial({ color: accentColor })
-    const border = new THREE.Mesh(borderGeo, borderMat)
-    border.position.set(0, 0, -0.1)
-    mesh.add(border)
 
     this.scene.add(mesh)
 

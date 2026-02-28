@@ -1,6 +1,7 @@
 export const TICK_RATE = 60           // logic ticks per second
 export const TICK_MS  = 1000 / TICK_RATE
-const MAX_DELTA_MS   = 100            // cap to prevent spiral of death
+const MAX_DELTA_MS       = 100        // cap large gaps (tab switch, breakpoint)
+const MAX_UPDATES_FRAME  = 3          // cap update iterations per RAF to prevent spiral
 
 export type UpdateFn = (dt: number) => void  // dt in seconds
 export type RenderFn = (alpha: number) => void // alpha = interpolation 0..1
@@ -56,10 +57,17 @@ export class GameLoop {
 
     this.accumulator += delta
 
-    // Fixed-timestep update loop
-    while (this.accumulator >= TICK_MS) {
+    // Fixed-timestep update loop — capped to prevent the spiral of death.
+    // When we can't keep up, we drop logic ticks rather than compound the lag.
+    let updates = 0
+    while (this.accumulator >= TICK_MS && updates < MAX_UPDATES_FRAME) {
       this.updateFn(TICK_MS / 1000)
       this.accumulator -= TICK_MS
+      updates++
+    }
+    // Discard any remaining excess so next frame starts clean
+    if (this.accumulator >= TICK_MS) {
+      this.accumulator = this.accumulator % TICK_MS
     }
 
     // Render with interpolation alpha
