@@ -76,6 +76,8 @@ export class GameEngine {
   private playerFrame = 0
   private playerFrameTick = 0
   private playerAttackCooldown = 0
+  // Reused across ticks — avoids allocating a new Set every 30 Hz
+  private liveMobIds = new Set<string>()
   private mobEntityIds = new Set<string>()
   private lastInteractLabel = ''
 
@@ -298,7 +300,7 @@ export class GameEngine {
     }
 
     this.entityRenderer.updatePosition('player', p.x, p.y)
-    this.healthBars.setHealth('player', p.x, p.y, p.hp / p.maxHp)
+    this.healthBars.setHealth('player', p.hp / p.maxHp)
 
     const isMoving = move.x !== 0 || move.y !== 0
     if (move.x > 0.1)       this.playerDir = 'right'
@@ -351,11 +353,8 @@ export class GameEngine {
         pet.name,
         0.6
       )
-      this.healthBars.setHealth(
-        `pet_${pet.instanceId}`,
-        targetX, targetY,
-        pet.stats.hp / pet.stats.maxHp
-      )
+      // Only ratio here — position synced in render() with interpolation
+      this.healthBars.setHealth(`pet_${pet.instanceId}`, pet.stats.hp / pet.stats.maxHp)
 
       const burnDmg = this.combatSystem.tickStatusEffects(pet, dt)
       if (burnDmg > 0) {
@@ -497,12 +496,14 @@ export class GameEngine {
   // ─── Mob Management ──────────────────────────────────────────────────────
 
   private syncMobsToRenderer(): void {
-    const liveMobIds = new Set<string>()
+    // Reuse the Set — clear() is O(n) but skips allocation + GC pressure
+    this.liveMobIds.clear()
 
-    for (const mob of this.mobSpawner.allMobs) {
+    // mobValues() returns an iterator directly — no Array.from allocation
+    for (const mob of this.mobSpawner.mobValues()) {
       if (mob.state === 'dead') continue
       const id = `mob_${mob.id}`
-      liveMobIds.add(id)
+      this.liveMobIds.add(id)
 
       const def = MOB_DEFINITIONS[mob.mobId]
       this.entityRenderer.addEntity(
@@ -513,13 +514,14 @@ export class GameEngine {
         def ? `${def.name} L${mob.level}` : mob.mobId,
         0.65
       )
-      this.healthBars.setHealth(id, mob.x, mob.y, mob.hp / mob.maxHp)
+      // Only pass the ratio — position is synced in render() with interpolation
+      this.healthBars.setHealth(id, mob.hp / mob.maxHp)
       this.mobEntityIds.add(id)
     }
 
     // Remove despawned mob entities
     for (const id of this.mobEntityIds) {
-      if (!liveMobIds.has(id)) {
+      if (!this.liveMobIds.has(id)) {
         this.entityRenderer.removeEntity(id)
         this.healthBars.remove(id)
         this.mobEntityIds.delete(id)
@@ -682,6 +684,8 @@ export class GameEngine {
     this.chunkRenderer.syncVisible(camX, camY, rx, ry)
 
     this.entityRenderer.render(alpha)
+    // Sync health bar positions to interpolated entity positions (smooth + no per-tick writes)
+    this.healthBars.syncPositions(this.entityRenderer, alpha)
     this.sceneRenderer.render()
   }
 

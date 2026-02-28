@@ -5,7 +5,7 @@ import { SeededRandom, chunkSeed } from './noise'
 import { CHUNK_SIZE } from './BiomeMap'
 import { eventBus } from '../engine/EventBus'
 
-const MAX_MOBS_PER_CHUNK = 4
+const MAX_MOBS_PER_CHUNK = 2   // reduced from 4 — halves entity count and draw calls
 const CHASE_RANGE   = 10    // tiles: mob starts chasing player
 const ATTACK_RANGE  = 1.3   // tiles: mob attacks player
 const WANDER_SPEED  = 1.6   // tiles/second when wandering
@@ -31,6 +31,11 @@ export class MobSpawner {
 
   constructor(worldSeed: number) {
     this.worldSeed = worldSeed
+  }
+
+  /** Iterate live mob instances without allocating a new Array. Use this in hot paths. */
+  mobValues(): IterableIterator<MobInstance> {
+    return this.mobs.values()
   }
 
   get allMobs(): MobInstance[] {
@@ -96,10 +101,20 @@ export class MobSpawner {
     this.chunkMobs.delete(chunkKey)
   }
 
+  // Squared distance threshold — skip full AI beyond this range (18 tiles)
+  private static readonly AI_CULL_DIST2 = 18 * 18
+
   /** Tick all mob AI. */
   update(dt: number, playerX: number, playerY: number): void {
     for (const mob of this.mobs.values()) {
       if (mob.state === 'dead') continue
+      // Skip AI for mobs far from the player — they can't see or reach the player anyway
+      const dx = playerX - mob.x
+      const dy = playerY - mob.y
+      if (dx * dx + dy * dy > MobSpawner.AI_CULL_DIST2) {
+        mob.state = 'wander'  // reset chase if they wandered out of range
+        continue
+      }
       this.updateMob(mob, dt, playerX, playerY)
     }
   }
