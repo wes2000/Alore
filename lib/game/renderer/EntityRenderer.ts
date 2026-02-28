@@ -309,27 +309,31 @@ function makeLabel(
   kind: EntityKind
 ): { sprite: THREE.Sprite; canvas: HTMLCanvasElement } {
   const canvas = document.createElement('canvas')
-  canvas.width = 128
-  canvas.height = 24
+  canvas.width = 256
+  canvas.height = 48
   const ctx = canvas.getContext('2d')!
-  ctx.clearRect(0, 0, 128, 24)
+  ctx.clearRect(0, 0, 256, 48)
 
   const color = kind === 'player' ? '#ffffff' :
                 kind === 'pet'    ? '#a0e8a0' :
                 kind === 'npc'    ? '#FFD700' : '#ff8080'
 
-  ctx.font = 'bold 11px monospace'
+  ctx.font = 'bold 20px monospace'
   ctx.textAlign = 'center'
-  ctx.fillStyle = 'rgba(0,0,0,0.6)'
-  ctx.fillRect(0, 0, 128, 24)
+  ctx.fillStyle = 'rgba(0,0,0,0.65)'
+  ctx.fillRect(0, 0, 256, 48)
+  ctx.strokeStyle = 'rgba(0,0,0,0.9)'
+  ctx.lineWidth = 4
+  ctx.strokeText(text, 128, 34)
   ctx.fillStyle = color
-  ctx.fillText(text, 64, 17)
+  ctx.fillText(text, 128, 34)
 
   const texture = new THREE.CanvasTexture(canvas)
   texture.minFilter = THREE.LinearFilter
+  texture.magFilter = THREE.LinearFilter
   const mat = new THREE.SpriteMaterial({ map: texture, transparent: true })
   const sprite = new THREE.Sprite(mat)
-  sprite.scale.set(1.6, 0.3, 1)
+  sprite.scale.set(2.0, 0.4, 1)
 
   return { sprite, canvas }
 }
