@@ -226,17 +226,35 @@ export default function GameCanvas() {
 
       {/* Loading overlay sits on top of the canvas — dismissed once engine is ready */}
       {loading && (
-        <div className="absolute inset-0 bg-game-bg flex items-center justify-center font-mono z-50">
-          <div className="text-center">
-            <div className="text-5xl mb-5 animate-pulse">🌿</div>
-            <div className="text-game-text text-xl font-bold mb-2 tracking-widest">WILDBORNE</div>
-            <div className="text-gray-500 text-sm">{loadMsg}</div>
-            <div className="mt-5 flex gap-1.5 justify-center">
+        <div
+          className="absolute inset-0 flex items-center justify-center z-50"
+          style={{ background: '#080808', fontFamily: "'Press Start 2P', monospace" }}
+        >
+          <div style={{ textAlign: 'center', color: '#F0E8C8' }}>
+            {/* Title box */}
+            <div style={{
+              border: '4px solid #F0E8C8',
+              padding: '16px 32px',
+              marginBottom: 24,
+              boxShadow: '6px 6px 0 #F0E8C8',
+            }}>
+              <div style={{ fontSize: 22, color: '#D03030', letterSpacing: 4, marginBottom: 6 }}>WILDBORNE</div>
+              <div style={{ fontSize: 7, color: '#C8B888', letterSpacing: 2 }}>A PIXEL ADVENTURE</div>
+            </div>
+            {/* Loading message */}
+            <div style={{ fontSize: 8, color: '#A8A8A8', marginBottom: 20, letterSpacing: 1 }}>{loadMsg}</div>
+            {/* Blinking dots */}
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
               {[0, 1, 2].map(i => (
                 <div
                   key={i}
-                  className="w-2 h-2 rounded-full bg-game-accent animate-bounce"
-                  style={{ animationDelay: `${i * 0.15}s` }}
+                  style={{
+                    width: 8,
+                    height: 8,
+                    background: '#D03030',
+                    animationDelay: `${i * 0.25}s`,
+                  }}
+                  className="animate-bounce"
                 />
               ))}
             </div>

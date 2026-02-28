@@ -4,12 +4,30 @@ import { useRef, useState, useCallback, useEffect } from 'react'
 import { GameEngine } from '@/lib/game/GameEngine'
 import { InputState } from '@/lib/game/engine/InputSystem'
 
-/** Max pixel displacement of the joystick knob from its center */
-const JOYSTICK_RADIUS = 52
+// ── D-pad arm size ─────────────────────────────────────────────────────────────
+const ARM = 50   // px per D-pad segment (total pad = ARM×3)
 
-interface Props {
-  engine: GameEngine | null
+// ── Game Boy Color-inspired palette ──────────────────────────────────────────
+const GB = {
+  dpad:     '#262626',
+  dpadLit:  '#505050',
+  dpadBd:   '#080808',
+  center:   '#101010',
+  btnA:     '#C01818',   // red A button
+  btnALit:  '#E83030',
+  btnB:     '#781010',   // darker B button
+  btnBLit:  '#A02020',
+  btnSm:    '#1A1A6A',   // dark blue for small buttons
+  btnSmLit: '#3030A0',
+  btnBd:    '#080808',
+  btnTxt:   '#F8F8F0',
+  runOff:   '#1A4020',
+  runOn:    '#30D060',
 }
+
+const PIXEL_FONT: React.CSSProperties = { fontFamily: "'Press Start 2P', monospace" }
+
+interface Props { engine: GameEngine | null }
 
 export default function MobileControls({ engine }: Props) {
   const [visible, setVisible] = useState(false)
@@ -21,155 +39,169 @@ export default function MobileControls({ engine }: Props) {
   if (!visible || !engine) return null
 
   return (
-    <div className="pointer-events-none absolute inset-0 select-none" style={{ touchAction: 'none' }}>
-      <Joystick engine={engine} />
-      <SprintButton engine={engine} />
-      <ActionButtons engine={engine} />
+    <div
+      className="pointer-events-none absolute inset-0 select-none"
+      style={{ touchAction: 'none', ...PIXEL_FONT }}
+    >
+      <DPad engine={engine} />
+      <RunButton engine={engine} />
+      <RightButtons engine={engine} />
     </div>
   )
 }
 
-// ─── Virtual Joystick ─────────────────────────────────────────────────────────
-
-function Joystick({ engine }: { engine: GameEngine }) {
-  const [knob, setKnob] = useState({ x: 0, y: 0 })
-  const [dragging, setDragging] = useState(false)
+// ── D-Pad: drag-zone joystick rendered as a cross ─────────────────────────────
+function DPad({ engine }: { engine: GameEngine }) {
+  const [vec, setVec] = useState({ x: 0, y: 0 })
   const activeId = useRef<number | null>(null)
-  const baseCenter = useRef({ x: 0, y: 0 })
+  const center   = useRef({ x: 0, y: 0 })
 
-  const size = JOYSTICK_RADIUS * 2 + 24
+  const isUp    = vec.y < -0.3
+  const isDown  = vec.y >  0.3
+  const isLeft  = vec.x < -0.3
+  const isRight = vec.x >  0.3
 
-  const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+  const onDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (activeId.current !== null) return
     e.currentTarget.setPointerCapture(e.pointerId)
     activeId.current = e.pointerId
-    const rect = e.currentTarget.getBoundingClientRect()
-    baseCenter.current = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
-    setDragging(true)
+    const r = e.currentTarget.getBoundingClientRect()
+    center.current = { x: r.left + r.width / 2, y: r.top + r.height / 2 }
     e.preventDefault()
   }, [])
 
-  const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+  const onMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerId !== activeId.current) return
-    const dx = e.clientX - baseCenter.current.x
-    const dy = e.clientY - baseCenter.current.y
+    const dx = e.clientX - center.current.x
+    const dy = e.clientY - center.current.y
     const dist = Math.sqrt(dx * dx + dy * dy)
-    const clampedDist = Math.min(dist, JOYSTICK_RADIUS)
-    const angle = Math.atan2(dy, dx)
-    setKnob({ x: Math.cos(angle) * clampedDist, y: Math.sin(angle) * clampedDist })
-    // Dead-zone of 6px before registering movement
-    const nx = dist > 6 ? dx / dist : 0
-    const ny = dist > 6 ? dy / dist : 0
+    if (dist < 10) {
+      setVec({ x: 0, y: 0 })
+      engine.inputSystem.setJoystickVector(0, 0)
+      return
+    }
+    const nx = dx / dist, ny = dy / dist
+    setVec({ x: nx, y: ny })
     engine.inputSystem.setJoystickVector(nx, ny)
     e.preventDefault()
   }, [engine])
 
-  const release = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+  const onUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerId !== activeId.current) return
     activeId.current = null
-    setDragging(false)
-    setKnob({ x: 0, y: 0 })
+    setVec({ x: 0, y: 0 })
     engine.inputSystem.setJoystickVector(0, 0)
   }, [engine])
+
+  // Shared style for each arm
+  const arm = (lit: boolean): React.CSSProperties => ({
+    position: 'absolute',
+    background: lit ? GB.dpadLit : GB.dpad,
+    border: `2px solid ${GB.dpadBd}`,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: lit ? '#E0E0E0' : '#484848',
+    fontSize: 11,
+    userSelect: 'none',
+    transition: 'background 0.05s, color 0.05s',
+  })
 
   return (
     <div
       className="pointer-events-auto absolute"
-      style={{ bottom: 108, left: 20, width: size, height: size, touchAction: 'none' }}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={release}
-      onPointerCancel={release}
+      style={{ bottom: 110, left: 10, width: ARM * 3, height: ARM * 3, touchAction: 'none' }}
+      onPointerDown={onDown}
+      onPointerMove={onMove}
+      onPointerUp={onUp}
+      onPointerCancel={onUp}
     >
-      {/* Outer ring */}
-      <div
-        className="absolute inset-0 rounded-full border-2 border-white/20 bg-black/20"
-      />
-      {/* Inner ring */}
-      <div
-        className="absolute rounded-full border border-white/10"
-        style={{
-          inset: JOYSTICK_RADIUS / 2,
-          borderRadius: '50%',
-        }}
-      />
-      {/* Knob */}
-      <div
-        className="absolute rounded-full bg-white/50 border-2 border-white/80"
-        style={{
-          width: 44,
-          height: 44,
-          left: '50%',
-          top: '50%',
-          transform: `translate(calc(-50% + ${knob.x}px), calc(-50% + ${knob.y}px))`,
-          transition: dragging ? 'none' : 'transform 0.12s ease-out',
-        }}
-      />
+      {/* Up */}
+      <div style={{ ...arm(isUp), left: ARM, top: 0, width: ARM, height: ARM }}>▲</div>
+      {/* Left */}
+      <div style={{ ...arm(isLeft), left: 0, top: ARM, width: ARM, height: ARM }}>◄</div>
+      {/* Center */}
+      <div style={{ position: 'absolute', left: ARM, top: ARM, width: ARM, height: ARM, background: GB.center, border: `2px solid ${GB.dpadBd}` }} />
+      {/* Right */}
+      <div style={{ ...arm(isRight), right: 0, top: ARM, width: ARM, height: ARM }}>►</div>
+      {/* Down */}
+      <div style={{ ...arm(isDown), left: ARM, bottom: 0, width: ARM, height: ARM }}>▼</div>
     </div>
   )
 }
 
-// ─── Sprint Toggle ─────────────────────────────────────────────────────────────
+// ── RUN toggle button (above the D-pad center) ────────────────────────────────
+function RunButton({ engine }: { engine: GameEngine }) {
+  const [on, setOn] = useState(false)
 
-function SprintButton({ engine }: { engine: GameEngine }) {
-  const [sprintOn, setSprintOn] = useState(false)
-
-  const onPointerDown = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+  const onDown = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId)
     e.preventDefault()
-    const next = !sprintOn
-    setSprintOn(next)
+    const next = !on
+    setOn(next)
     engine.inputSystem.setMobileButton('sprint', next)
-  }, [engine, sprintOn])
+  }, [engine, on])
 
   return (
     <button
-      className={`pointer-events-auto absolute rounded-full border-2 font-bold text-white flex items-center justify-center select-none transition-colors ${
-        sprintOn
-          ? 'bg-teal-500/90 border-teal-300'
-          : 'bg-black/40 border-white/25 text-white/60'
-      }`}
-      style={{ bottom: 220, left: 30, width: 46, height: 46, fontSize: 20, touchAction: 'none' }}
-      onPointerDown={onPointerDown}
+      className="pointer-events-auto absolute"
+      style={{
+        // positioned above the up-arm of the D-pad
+        bottom: 110 + ARM * 3 + 8,
+        left: 10 + ARM,
+        width: ARM,
+        height: 28,
+        background: on ? GB.runOn : GB.runOff,
+        border: `2px solid ${GB.dpadBd}`,
+        color: on ? '#101010' : '#80C090',
+        fontSize: 6,
+        ...PIXEL_FONT,
+        cursor: 'pointer',
+        touchAction: 'none',
+        boxShadow: on ? 'none' : `2px 2px 0 ${GB.dpadBd}`,
+        transform: on ? 'translate(2px, 2px)' : 'none',
+        letterSpacing: 1,
+      }}
+      onPointerDown={onDown}
     >
-      ⚡
+      RUN
     </button>
   )
 }
 
-// ─── Action Buttons ────────────────────────────────────────────────────────────
-
-function ActionButtons({ engine }: { engine: GameEngine }) {
+// ── Right-side buttons (GB A/B + skills/dodge) ────────────────────────────────
+function RightButtons({ engine }: { engine: GameEngine }) {
   return (
     <div
-      className="pointer-events-auto absolute flex flex-col items-end gap-3"
-      style={{ bottom: 108, right: 20 }}
+      className="pointer-events-auto absolute flex flex-col items-end"
+      style={{ bottom: 110, right: 12, gap: 12 }}
     >
-      {/* Row 1: Abilities */}
-      <div className="flex gap-2">
-        <ActionBtn engine={engine} action="ability1" label="Q" size={46} color="bg-indigo-600/75 border-indigo-400" />
-        <ActionBtn engine={engine} action="ability2" label="R" size={46} color="bg-purple-600/75 border-purple-400" />
+      {/* Row 1: Q (Ability 1) · R (Ability 2) — small oval SELECT-style */}
+      <div style={{ display: 'flex', gap: 10 }}>
+        <GBBtn engine={engine} action="ability1" label="Q" size={44} bg={GB.btnSm} bgLit={GB.btnSmLit} />
+        <GBBtn engine={engine} action="ability2" label="R" size={44} bg={GB.btnSm} bgLit={GB.btnSmLit} />
       </div>
-      {/* Row 2: Dodge · Interact · Attack */}
-      <div className="flex gap-2 items-center">
-        <ActionBtn engine={engine} action="dodge"    label="💨" size={46} color="bg-sky-600/75 border-sky-400" />
-        <ActionBtn engine={engine} action="interact" label="E"  size={54} color="bg-yellow-600/75 border-yellow-400" />
-        <ActionBtn engine={engine} action="attack"   label="⚔"  size={66} color="bg-red-600/75 border-red-400" fontSize={24} />
+
+      {/* Row 2: Dodge · B (interact) · A (attack) */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+        <GBBtn engine={engine} action="dodge"    label="DG" size={40} bg={GB.dpad}  bgLit={GB.dpadLit} />
+        <GBBtn engine={engine} action="interact" label="B"  size={56} bg={GB.btnB}  bgLit={GB.btnBLit} />
+        <GBBtn engine={engine} action="attack"   label="A"  size={70} bg={GB.btnA}  bgLit={GB.btnALit} />
       </div>
     </div>
   )
 }
 
-interface ActionBtnProps {
+interface GBBtnProps {
   engine: GameEngine
   action: keyof InputState
   label: string
   size: number
-  color: string
-  fontSize?: number
+  bg: string
+  bgLit: string
 }
 
-function ActionBtn({ engine, action, label, size, color, fontSize }: ActionBtnProps) {
+function GBBtn({ engine, action, label, size, bg, bgLit }: GBBtnProps) {
   const [pressed, setPressed] = useState(false)
 
   const onDown = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
@@ -186,20 +218,32 @@ function ActionBtn({ engine, action, label, size, color, fontSize }: ActionBtnPr
     engine.inputSystem.setMobileButton(action, false)
   }, [engine, action])
 
+  const fontSize = size >= 66 ? 13 : size >= 52 ? 10 : 7
+
   return (
     <button
-      className={`rounded-full border-2 flex items-center justify-center font-bold text-white select-none ${color} ${pressed ? 'opacity-100' : 'opacity-70'}`}
-      style={{
-        width: size,
-        height: size,
-        fontSize: fontSize ?? (size > 54 ? 18 : 14),
-        transform: pressed ? 'scale(0.9)' : 'scale(1)',
-        transition: 'transform 0.08s ease, opacity 0.08s ease',
-        touchAction: 'none',
-      }}
       onPointerDown={onDown}
       onPointerUp={onUp}
       onPointerCancel={onUp}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        background: pressed ? bgLit : bg,
+        color: GB.btnTxt,
+        border: `3px solid ${GB.btnBd}`,
+        ...PIXEL_FONT,
+        fontSize,
+        cursor: 'pointer',
+        transform: pressed ? 'translate(2px, 2px)' : 'none',
+        boxShadow: pressed ? 'none' : `3px 3px 0 ${GB.btnBd}`,
+        transition: 'none',
+        touchAction: 'none',
+        userSelect: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
     >
       {label}
     </button>
