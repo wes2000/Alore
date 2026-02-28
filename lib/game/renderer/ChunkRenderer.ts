@@ -101,18 +101,27 @@ export class ChunkRenderer {
     const k = this.key(chunk.cx, chunk.cy)
     const existingTex = this.textures.get(k)
     if (existingTex) {
-      // Repaint onto existing texture
       this.paintChunk(chunk)
+      // Copy updated pixels into the texture's own snapshot canvas so Three.js
+      // uploads the correct content (existingTex.image is the per-chunk canvas).
+      const snapCtx = (existingTex.image as HTMLCanvasElement).getContext('2d')!
+      snapCtx.drawImage(this.canvas2d, 0, 0)
       existingTex.needsUpdate = true
     }
   }
 
   private buildTexture(chunk: ChunkState): THREE.CanvasTexture {
     this.paintChunk(chunk)
-    const tex = new THREE.CanvasTexture(this.canvas2d)
+    // Give every chunk its own canvas so that batch-loading many chunks at once
+    // doesn't cause all of their CanvasTextures to read the same shared canvas
+    // at upload time (they would all show the last-painted chunk).
+    const snap = document.createElement('canvas')
+    snap.width  = CANVAS_SIZE
+    snap.height = CANVAS_SIZE
+    snap.getContext('2d')!.drawImage(this.canvas2d, 0, 0)
+    const tex = new THREE.CanvasTexture(snap)
     tex.magFilter = THREE.NearestFilter
     tex.minFilter = THREE.NearestFilter
-    // Create an ImageBitmap to decouple from the shared canvas
     return tex
   }
 

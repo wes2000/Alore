@@ -72,6 +72,10 @@ export class GameEngine {
   private mobEntityIds = new Set<string>()
   private lastInteractLabel = ''
 
+  // Previous player position for camera interpolation (set each tick before movement)
+  private prevPlayerX = 0
+  private prevPlayerY = 0
+
   // Change-detection for player stat events (avoids 60fps React re-renders)
   private prevHpRounded    = -1
   private prevMaxHp        = -1
@@ -137,6 +141,10 @@ export class GameEngine {
     )
 
     this.setupEventListeners()
+
+    // Seed interpolation state so the first render doesn't snap from 0,0
+    this.prevPlayerX = this.playerState.x
+    this.prevPlayerY = this.playerState.y
 
     // Pre-warm chunks around spawn
     this.chunkSystem.preloadAround(this.playerState.x, this.playerState.y, PRELOAD_RADIUS)
@@ -238,6 +246,10 @@ export class GameEngine {
     const input = this.inputSystem.getState()
     const move  = this.inputSystem.getMoveVector()
     const p     = this.playerState
+
+    // Snapshot position before movement so render() can interpolate the camera
+    this.prevPlayerX = p.x
+    this.prevPlayerY = p.y
 
     // Cancel gathering when player moves
     if ((move.x !== 0 || move.y !== 0) && this.gatheringSystem.isGathering) {
@@ -646,8 +658,10 @@ export class GameEngine {
   private render(alpha: number): void {
     const p = this.playerState
 
-    const camX = p.x + 0.5
-    const camY = -(p.y + 0.5)
+    // Interpolate camera between the previous and current tick positions so the
+    // background scrolls at the same rate as the player sprite — eliminates stutter.
+    const camX =  this.prevPlayerX + (p.x - this.prevPlayerX) * alpha + 0.5
+    const camY = -(this.prevPlayerY + (p.y - this.prevPlayerY) * alpha + 0.5)
     this.sceneRenderer.setCameraPosition(camX, camY)
 
     const { rx, ry } = this.sceneRenderer.getVisibleTileRadius()

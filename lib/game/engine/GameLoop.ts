@@ -58,16 +58,12 @@ export class GameLoop {
     this.accumulator += delta
 
     // Fixed-timestep update loop — capped to prevent the spiral of death.
-    // When we can't keep up, we drop logic ticks rather than compound the lag.
+    // Excess accumulator carries over naturally; MAX_DELTA_MS already bounds worst-case lag.
     let updates = 0
     while (this.accumulator >= TICK_MS && updates < MAX_UPDATES_FRAME) {
       this.updateFn(TICK_MS / 1000)
       this.accumulator -= TICK_MS
       updates++
-    }
-    // Discard any remaining excess so next frame starts clean
-    if (this.accumulator >= TICK_MS) {
-      this.accumulator = this.accumulator % TICK_MS
     }
 
     // Render with interpolation alpha
