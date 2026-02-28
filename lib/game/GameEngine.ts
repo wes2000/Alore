@@ -172,12 +172,12 @@ export class GameEngine {
     // Initialize quest system (must be after player state is loaded)
     this.questSystem = new QuestSystem(this.playerState, this.skillSystem)
 
-    // Add player entity
+    // Add player entity (no label — player name clutters center screen)
     this.entityRenderer.addEntity(
       'player', 'player',
       this.playerState.x, this.playerState.y,
       0x4488ff, 0x88bbff,
-      this.playerState.name
+      undefined
     )
 
     // Add shopkeeper NPC near spawn
@@ -813,7 +813,7 @@ export class GameEngine {
       const entranceRoom = chunk.dungeonData.rooms.find(r => r.type === 'entrance')
       if (entranceRoom && lx >= entranceRoom.x && lx < entranceRoom.x + entranceRoom.w &&
           ly >= entranceRoom.y && ly < entranceRoom.y + entranceRoom.h) {
-        const label = `Enter Dungeon (Tier ${chunk.dungeonData.tier}) [E]`
+        const label = `Enter Dungeon (Tier ${chunk.dungeonData.tier})`
         if (label !== this.lastInteractLabel) {
           this.lastInteractLabel = label
           eventBus.emit('interact:nearby', { label })
@@ -825,7 +825,7 @@ export class GameEngine {
     // Check shopkeeper NPC
     const shopDist = Math.hypot(p.x + 0.5 - (SHOP_NPC_X + 0.5), p.y + 0.5 - (SHOP_NPC_Y + 0.5))
     if (shopDist <= SHOP_INTERACT_RANGE) {
-      const label = 'General Store [E]'
+      const label = 'General Store'
       if (label !== this.lastInteractLabel) {
         this.lastInteractLabel = label
         eventBus.emit('interact:nearby', { label })
@@ -836,7 +836,7 @@ export class GameEngine {
     const tameTarget = this.mobSpawner.getTameableMobNearby(p.x + 0.5, p.y + 0.5, INTERACT_RANGE)
     if (tameTarget) {
       const def = MOB_DEFINITIONS[tameTarget.mobId]
-      const label = `Tame ${def?.name ?? tameTarget.mobId} [E]`
+      const label = `Tame ${def?.name ?? tameTarget.mobId}`
       if (label !== this.lastInteractLabel) {
         this.lastInteractLabel = label
         eventBus.emit('interact:nearby', { label })
@@ -847,7 +847,7 @@ export class GameEngine {
     const nodeResult = this.findNearbyNode()
     if (nodeResult) {
       const typeLabel = nodeResult.node.type.replace(/([A-Z])/g, ' $1').trim()
-      const label = `Gather ${typeLabel} [E]`
+      const label = `Gather ${typeLabel}`
       if (label !== this.lastInteractLabel) {
         this.lastInteractLabel = label
         eventBus.emit('interact:nearby', { label })
@@ -905,7 +905,7 @@ export class GameEngine {
         mob.x, mob.y,
         def?.color ?? 0x888888,
         def?.accentColor ?? 0xaaaaaa,
-        def ? `${def.name} L${mob.level}` : mob.mobId,
+        def?.name ?? mob.mobId,
         0.65
       )
       // Only pass the ratio — position is synced in render() with interpolation
