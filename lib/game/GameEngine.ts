@@ -30,8 +30,8 @@ const SPRINT_MULT          = 1.7
 const ENERGY_SPRINT_DRAIN  = 12    // energy/sec while sprinting
 const ENERGY_REGEN         = 6     // energy/sec when not sprinting
 
-const PRELOAD_RADIUS       = 3     // chunks around player to preload (tile data, collision)
-const RENDER_RADIUS        = 2     // chunks around player to hold GPU textures (5×5 = 25 max)
+const PRELOAD_RADIUS       = 2     // chunks around player to preload (tile data, collision)
+const RENDER_RADIUS        = 1     // chunks around player to hold GPU textures (3×3 = 9 max)
 
 // Tick-count thresholds derived from TICK_RATE so they stay correct if the rate changes
 const AUTO_SAVE_TICKS      = TICK_RATE * 30           // every 30 s
@@ -676,9 +676,9 @@ export class GameEngine {
     const camY = -(this.prevPlayerY + (p.y - this.prevPlayerY) * alpha + 0.5)
     this.sceneRenderer.setCameraPosition(camX, camY)
 
-    // Build/repaint at most 2 chunks per frame — spreads expensive canvas work
-    // so no single frame ever stalls waiting for chunk painting.
-    this.chunkRenderer.processPending(2)
+    // Build/repaint at most 4 chunks per frame — 16×16 chunks are 4× cheaper so
+    // we can process more per frame without stalling the main thread.
+    this.chunkRenderer.processPending(4)
 
     const { rx, ry } = this.sceneRenderer.getVisibleTileRadius()
     this.chunkRenderer.syncVisible(camX, camY, rx, ry)
