@@ -563,6 +563,9 @@ export class GameEngine {
     const cx = Math.floor(p.x / CHUNK_SIZE)
     const cy = Math.floor(p.y / CHUNK_SIZE)
 
+    let bestDist = Infinity
+    let bestResult: { node: ResourceNodeState; chunkKey: string } | null = null
+
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
         const chunk = this.chunkSystem.getChunk(cx + dx, cy + dy)
@@ -571,13 +574,14 @@ export class GameEngine {
           const wx = chunk.cx * CHUNK_SIZE + node.localX
           const wy = chunk.cy * CHUNK_SIZE + node.localY
           const dist = Math.sqrt((wx - p.x - 0.5) ** 2 + (wy - p.y - 0.5) ** 2)
-          if (dist <= INTERACT_RANGE) {
-            return { node, chunkKey: `${chunk.cx}_${chunk.cy}` }
+          if (dist <= INTERACT_RANGE && dist < bestDist) {
+            bestDist = dist
+            bestResult = { node, chunkKey: `${chunk.cx}_${chunk.cy}` }
           }
         }
       }
     }
-    return null
+    return bestResult
   }
 
   // ─── Mob Management ──────────────────────────────────────────────────────
