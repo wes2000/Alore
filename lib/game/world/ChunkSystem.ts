@@ -10,7 +10,8 @@ const MAX_CACHED_CHUNKS = 200       // LRU eviction limit
 
 export class ChunkSystem {
   private chunks = new Map<string, ChunkState>()
-  private accessOrder: string[] = []
+  // Insertion-ordered Map used as LRU: delete+re-insert = O(1) touch, first key = oldest
+  private lruOrder = new Map<string, true>()
   private worldSeed: number
   private noise: WorldNoise
 
@@ -59,22 +60,22 @@ export class ChunkSystem {
   }
 
   private touch(k: string): void {
-    const idx = this.accessOrder.indexOf(k)
-    if (idx !== -1) this.accessOrder.splice(idx, 1)
-    this.accessOrder.push(k)
+    // Delete + re-insert keeps insertion order correct — O(1) in V8
+    this.lruOrder.delete(k)
+    this.lruOrder.set(k, true)
   }
 
   private evictIfNeeded(): void {
-    while (this.accessOrder.length > MAX_CACHED_CHUNKS) {
-      const oldest = this.accessOrder.shift()!
-      // Don't evict dirty chunks
-      if (!this.dirtyChunks.has(oldest)) {
-        this.chunks.delete(oldest)
-      } else {
-        // Put it back
-        this.accessOrder.unshift(oldest)
+    while (this.lruOrder.size > MAX_CACHED_CHUNKS) {
+      const oldest = this.lruOrder.keys().next().value!
+      // Don't evict dirty chunks; move them to end and stop trying
+      if (this.dirtyChunks.has(oldest)) {
+        this.lruOrder.delete(oldest)
+        this.lruOrder.set(oldest, true)
         break
       }
+      this.chunks.delete(oldest)
+      this.lruOrder.delete(oldest)
     }
   }
 

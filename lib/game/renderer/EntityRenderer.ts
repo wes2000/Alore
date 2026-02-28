@@ -111,6 +111,11 @@ export class EntityRenderer {
     this.entities.delete(id)
   }
 
+  /** Read-only access to entity state — used by HealthBarRenderer in the render pass. */
+  getEntity(id: string): EntityVisual | undefined {
+    return this.entities.get(id)
+  }
+
   /** Interpolated render — alpha is 0..1 between logic ticks */
   render(alpha: number): void {
     // Lazily apply player sprite texture once it becomes available
@@ -194,12 +199,18 @@ function makeLabel(
 export class HealthBarRenderer {
   private scene: THREE.Scene
   private bars = new Map<string, { bg: THREE.Mesh; fg: THREE.Mesh }>()
+  // Cache last ratio per entity so we skip redundant color/scale writes
+  private ratioCache = new Map<string, number>()
 
   constructor(scene: THREE.Scene) {
     this.scene = scene
   }
 
-  setHealth(id: string, x: number, y: number, ratio: number): void {
+  /**
+   * Called in the UPDATE tick: ensures the bar exists and updates HP ratio/color only.
+   * Position is NOT set here — it is synced in the RENDER pass (with interpolation).
+   */
+  setHealth(id: string, ratio: number): void {
     if (!this.bars.has(id)) {
       const bgGeo = new THREE.PlaneGeometry(0.8, 0.1)
       const bgMat = new THREE.MeshBasicMaterial({ color: 0x400000 })
@@ -209,20 +220,41 @@ export class HealthBarRenderer {
       const fgMat = new THREE.MeshBasicMaterial({ color: 0x20c020 })
       const fg = new THREE.Mesh(fgGeo, fgMat)
 
+      // Start hidden off-screen; position will be set on first render pass
+      bg.visible = false
+      fg.visible = false
       this.scene.add(bg)
       this.scene.add(fg)
       this.bars.set(id, { bg, fg })
     }
 
-    const { bg, fg } = this.bars.get(id)!
-    const bz = 0.9
-    bg.position.set(x + 0.5, -(y + 0.5) - 0.5, bz)
-    fg.position.set(x + 0.5 - (1 - ratio) * 0.4, -(y + 0.5) - 0.5, bz + 0.01)
-    fg.scale.set(ratio, 1, 1)
+    // Only touch Three.js objects when ratio actually changed (avoids redundant GPU state writes)
+    const prev = this.ratioCache.get(id) ?? -1
+    if (Math.abs(ratio - prev) > 0.005) {
+      this.ratioCache.set(id, ratio)
+      const { fg } = this.bars.get(id)!
+      fg.scale.set(ratio, 1, 1)
+      const color = ratio > 0.5 ? 0x20c020 : ratio > 0.25 ? 0xe0c020 : 0xe02020
+      ;(fg.material as THREE.MeshBasicMaterial).color.setHex(color)
+    }
+  }
 
-    // Color by health
-    const color = ratio > 0.5 ? 0x20c020 : ratio > 0.25 ? 0xe0c020 : 0xe02020
-    ;(fg.material as THREE.MeshBasicMaterial).color.setHex(color)
+  /**
+   * Called in the RENDER pass: syncs bar positions to interpolated entity positions.
+   * This gives health bars the same smooth motion as entity sprites.
+   */
+  syncPositions(entityRenderer: EntityRenderer, alpha: number): void {
+    const bz = 0.9
+    for (const [id, bar] of this.bars) {
+      const e = entityRenderer.getEntity(id)
+      if (!e) continue
+      const ix = e.prevX + (e.currX - e.prevX) * alpha
+      const iy = e.prevY + (e.currY - e.prevY) * alpha
+      const ratio = this.ratioCache.get(id) ?? 1
+      bar.bg.position.set(ix + 0.5, -(iy + 0.5) - 0.5, bz)
+      bar.fg.position.set(ix + 0.5 - (1 - ratio) * 0.4, -(iy + 0.5) - 0.5, bz + 0.01)
+      if (!bar.bg.visible) { bar.bg.visible = true; bar.fg.visible = true }
+    }
   }
 
   remove(id: string): void {
@@ -233,6 +265,7 @@ export class HealthBarRenderer {
     bar.bg.geometry.dispose()
     bar.fg.geometry.dispose()
     this.bars.delete(id)
+    this.ratioCache.delete(id)
   }
 
   dispose(): void {
