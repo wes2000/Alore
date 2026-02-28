@@ -7,7 +7,7 @@ import {
 } from '../data/biomes'
 import { WorldNoise, SeededRandom, chunkSeed } from './noise'
 
-export const CHUNK_SIZE = 32  // tiles per chunk side
+export const CHUNK_SIZE = 16  // tiles per chunk side
 
 /** Determine biome from noise values + distance-from-spawn weighting */
 export function sampleBiome(
