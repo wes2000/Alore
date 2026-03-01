@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { PlayerState, PetInstance, SkillType, BiomeType } from '../game/data/types'
+import { PlayerState, PetInstance, SkillType, BiomeType, DialogueNode } from '../game/data/types'
 
 interface Notification {
   id: string
@@ -8,7 +8,14 @@ interface Notification {
   expiresAt: number
 }
 
-type PanelName = 'skills' | 'pets' | 'inventory' | 'map' | 'crafting' | 'quests'
+type PanelName = 'skills' | 'pets' | 'inventory' | 'map' | 'crafting' | 'quests' | 'bestiary'
+
+interface DialogueState {
+  npcId: string
+  npcName: string
+  npcIcon: string
+  node: DialogueNode
+}
 
 interface GameStore {
   // Player mirrors (updated from engine for React UI)
@@ -44,6 +51,9 @@ interface GameStore {
   playerStatusEffects: string[]
   activeQuestCount: number
 
+  // M6: NPC dialogue
+  dialogue: DialogueState | null
+
   // Actions
   setPlayerHP:    (hp: number, max: number) => void
   setPlayerEnergy:(energy: number, max: number) => void
@@ -63,6 +73,7 @@ interface GameStore {
   setActiveSpellName:(name: string | null) => void
   setPlayerStatusEffects:(effects: string[]) => void
   setActiveQuestCount:(count: number) => void
+  setDialogue: (dialogue: DialogueState | null) => void
   addNotification:(message: string, type: Notification['type']) => void
   removeNotification:(id: string) => void
   clearExpiredNotifications:() => void
@@ -92,6 +103,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   activeSpellName: null,
   playerStatusEffects: [],
   activeQuestCount: 0,
+  dialogue: null,
 
   setPlayerHP:       (hp, max)    => set({ playerHP: hp, playerMaxHP: max }),
   setPlayerEnergy:   (energy, max)=> set({ playerEnergy: energy, playerMaxEnergy: max }),
@@ -114,6 +126,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setActiveSpellName: (name) => set({ activeSpellName: name }),
   setPlayerStatusEffects: (effects) => set({ playerStatusEffects: effects }),
   setActiveQuestCount: (count) => set({ activeQuestCount: count }),
+  setDialogue: (dialogue) => set({ dialogue }),
 
   addNotification: (message, type) => {
     const id = Math.random().toString(36).slice(2)

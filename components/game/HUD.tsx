@@ -8,6 +8,9 @@ import Minimap from './Minimap'
 import ShopPanel from './ShopPanel'
 import CraftingPanel from './panels/CraftingPanel'
 import QuestPanel from './panels/QuestPanel'
+import DialoguePanel from './panels/DialoguePanel'
+import BestiaryPanel from './panels/BestiaryPanel'
+import MapPanel from './panels/MapPanel'
 
 const CREAM  = '#F0E8C8'
 const BLACK  = '#181818'
@@ -130,12 +133,13 @@ export default function HUD({ engine }: HUDProps) {
           { label: 'MAP', panel: 'map',       hotkey: 'M' },
           { label: 'CRF', panel: 'crafting',  hotkey: 'C' },
           { label: 'QST', panel: 'quests',    hotkey: 'J' },
+          { label: 'BST', panel: 'bestiary',  hotkey: 'B' },
         ].map(({ label, panel: p, hotkey }) => {
           const isActive = activePanel === p
           return (
             <button
               key={p}
-              onClick={() => togglePanel(p as 'skills' | 'pets' | 'inventory' | 'map' | 'crafting' | 'quests')}
+              onClick={() => togglePanel(p as 'skills' | 'pets' | 'inventory' | 'map' | 'crafting' | 'quests' | 'bestiary')}
               style={{
                 ...panel,
                 padding: '5px 7px',
@@ -233,6 +237,15 @@ export default function HUD({ engine }: HUDProps) {
 
       {/* ── Quest overlay ── */}
       <QuestPanel engine={engine} />
+
+      {/* ── Dialogue overlay ── */}
+      <DialoguePanel engine={engine} />
+
+      {/* ── Bestiary overlay ── */}
+      <BestiaryPanel engine={engine} />
+
+      {/* ── World Map overlay ── */}
+      <MapPanel engine={engine} />
 
       {/* ── Controls hint (desktop only) ── */}
       <div

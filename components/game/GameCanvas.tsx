@@ -62,6 +62,8 @@ export default function GameCanvas() {
       eventBus.on('gather:progress',       ({ progress })     => store.setGatherProgress(progress)),
       eventBus.on('gather:complete',       ()                 => { store.setGatherProgress(null); store.setGatherNodeType(null) }),
       eventBus.on('gather:cancel',         ()                 => { store.setGatherProgress(null); store.setGatherNodeType(null) }),
+      eventBus.on('dialogue:open',         ({ npcId, npcName, npcIcon, node }) => store.setDialogue({ npcId, npcName, npcIcon, node })),
+      eventBus.on('dialogue:close',        ()                 => store.setDialogue(null)),
       eventBus.on('shop:open',             ()                 => store.setShopOpen(true)),
       eventBus.on('shop:close',            ()                 => store.setShopOpen(false)),
       eventBus.on('save:requested', async () => {
@@ -95,6 +97,7 @@ export default function GameCanvas() {
       if (e.code === 'KeyP')   store.togglePanel('pets')
       if (e.code === 'Tab')  { e.preventDefault(); store.togglePanel('inventory') }
       if (e.code === 'KeyM')   store.togglePanel('map')
+      if (e.code === 'KeyB')   store.togglePanel('bestiary')
       if (e.code === 'Escape') store.setPanel(null)
       if (e.code === 'Equal' || e.code === 'NumpadAdd') {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
