@@ -113,7 +113,7 @@ export default function ShopPanel({ engine }: Props) {
                     key={listing.id}
                     style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 6px', background: '#E0D8A8', border: `2px solid ${BLACK}` }}
                   >
-                    <span style={{ fontSize: 16, lineHeight: 1 }}>{def.icon}</span>
+                    <span className="emoji-icon" style={{ fontSize: 16, lineHeight: 1 }}>{def.icon}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 5 }}>{def.name}</div>
                       <div style={{ fontSize: 4, color: SHADOW, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{def.description}</div>
@@ -145,7 +145,7 @@ export default function ShopPanel({ engine }: Props) {
                       key={slot.slotIndex}
                       style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 6px', background: '#E0D8A8', border: `2px solid ${BLACK}` }}
                     >
-                      <span style={{ fontSize: 16, lineHeight: 1 }}>{def.icon}</span>
+                      <span className="emoji-icon" style={{ fontSize: 16, lineHeight: 1 }}>{def.icon}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 5 }}>{def.name} ×{slot.quantity}</div>
                       </div>

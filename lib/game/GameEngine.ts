@@ -99,6 +99,10 @@ export class GameEngine {
 
   // Pet ability cooldown tracking: petInstanceId → { abilityId → lastUsedTimeSec }
   private petAbilityCooldowns = new Map<string, Record<string, number>>()
+  // Smooth pet follow positions: petInstanceId → { x, y }
+  private petPositions = new Map<string, { x: number; y: number }>()
+  // Dash-in-progress: petInstanceId → { returnX, returnY, endTick }
+  private petDashState = new Map<string, { returnX: number; returnY: number; endTick: number }>()
 
   // Previous player position for camera interpolation (set each tick before movement)
   private prevPlayerX = 0
@@ -444,17 +448,65 @@ export class GameEngine {
     const p = this.playerState
     const nowSec = Date.now() / 1000
 
+    // Direction offsets: pets trail behind the player based on facing
+    const dirOff: Record<string, { x: number; y: number }> = {
+      up:    { x: 0,  y: 1 },   // behind = below
+      down:  { x: 0,  y: -1 },  // behind = above
+      left:  { x: 1,  y: 0 },   // behind = right
+      right: { x: -1, y: 0 },   // behind = left
+    }
+    const behind = dirOff[this.playerDir] ?? { x: 0, y: 1 }
+
     active.forEach((pet, slot) => {
-      const angle = (slot / Math.max(1, active.length)) * Math.PI * 2 + this.tickCount * 0.02
-      const followRadius = 1.5 + slot * 0.5
-      const targetX = p.x + Math.cos(angle) * followRadius - 0.5
-      const targetY = p.y + Math.sin(angle) * followRadius - 0.5
+      // ── Natural follow position ───────────────────────────────────────────
+      // Spread pets perpendicular to the player's facing direction
+      const perpX = -behind.y  // perpendicular vector
+      const perpY = behind.x
+      const numPets = active.length
+      const spread = numPets > 1 ? (slot - (numPets - 1) / 2) * 1.2 : 0
+      const followDist = 1.4 + slot * 0.3
+      const goalX = p.x + behind.x * followDist + perpX * spread
+      const goalY = p.y + behind.y * followDist + perpY * spread
+
+      // Get or initialize pet's actual world position
+      let pos = this.petPositions.get(pet.instanceId)
+      if (!pos) {
+        pos = { x: goalX, y: goalY }
+        this.petPositions.set(pet.instanceId, pos)
+      }
+
+      // Check if pet is mid-dash (dash_strike / shadow_strike)
+      const dash = this.petDashState.get(pet.instanceId)
+      if (dash) {
+        if (this.tickCount >= dash.endTick) {
+          // Dash finished — snap back toward follow position
+          this.petDashState.delete(pet.instanceId)
+        }
+        // During dash, pet stays at its current (warped) position — no lerp
+      } else {
+        // Smooth follow: lerp toward goal position
+        const dx = goalX - pos.x
+        const dy = goalY - pos.y
+        const dist = Math.sqrt(dx * dx + dy * dy)
+
+        if (dist > 8) {
+          // Teleport if too far (chunk transition, etc.)
+          pos.x = goalX
+          pos.y = goalY
+        } else if (dist > 0.15) {
+          // Smooth follow — faster when farther, slower when close
+          const speed = Math.min(dist * 3.5, 6) * dt
+          pos.x += (dx / dist) * speed
+          pos.y += (dy / dist) * speed
+        }
+        // If dist <= 0.15, pet is close enough — stay put (no jitter)
+      }
 
       const petColor = getPetColor(pet.definitionId)
       const petTex = getPetTexture(pet.definitionId, petColor, Element.None)
       this.entityRenderer.addEntity(
         `pet_${pet.instanceId}`, 'pet',
-        targetX, targetY,
+        pos.x, pos.y,
         parseInt(petColor.replace('#', ''), 16),
         0xffffff,
         pet.name,
@@ -483,19 +535,36 @@ export class GameEngine {
       // ── Pet combat AI ──────────────────────────────────────────────────────
       // Check every 3 ticks (~10 Hz) to keep overhead low
       if (this.tickCount % 3 === 0 && pet.activeAbilities.length > 0) {
-        const petCx = targetX + 0.5
-        const petCy = targetY + 0.5
-        const nearbyMob = this.mobSpawner.getMobAt(petCx, petCy, 4.25)
+        const petCx = pos.x + 0.5
+        const petCy = pos.y + 0.5
+        const searchRadius = Math.max(4.25, ...pet.activeAbilities.map(id => ABILITIES[id]?.range ?? 0))
+        const nearbyMob = this.mobSpawner.getMobAt(petCx, petCy, searchRadius)
         if (nearbyMob) {
+          const mobDist = Math.sqrt((nearbyMob.x + 0.5 - petCx) ** 2 + (nearbyMob.y + 0.5 - petCy) ** 2)
           const cooldowns = this.petAbilityCooldowns.get(pet.instanceId) ?? {}
           for (const abilityId of pet.activeAbilities) {
             const ability = ABILITIES[abilityId]
             if (!ability || ability.isPassive || ability.basePower === 0) continue
+            if (mobDist > (ability.range || 4.25)) continue  // respect ability range
             const lastUsed = cooldowns[abilityId] ?? 0
             if (nowSec - lastUsed >= ability.cooldown) {
               // Use the ability!
               cooldowns[abilityId] = nowSec
               this.petAbilityCooldowns.set(pet.instanceId, cooldowns)
+
+              // Gap-closer abilities: dash to the target
+              const isDash = abilityId === 'dash_strike' || abilityId === 'shadow_strike' || abilityId === 'tackle'
+              if (isDash && mobDist > 1.5) {
+                // Warp pet next to the mob
+                const dirToMob = Math.atan2(nearbyMob.y + 0.5 - petCy, nearbyMob.x + 0.5 - petCx)
+                pos.x = nearbyMob.x + 0.5 - Math.cos(dirToMob) * 0.8 - 0.5
+                pos.y = nearbyMob.y + 0.5 - Math.sin(dirToMob) * 0.8 - 0.5
+                // Mark as dashing — hold position for a few ticks before returning
+                this.petDashState.set(pet.instanceId, {
+                  returnX: goalX, returnY: goalY,
+                  endTick: this.tickCount + 12,  // ~0.4s at 30Hz
+                })
+              }
 
               const atkStat = ability.damageType === 'Magical' ? pet.stats.matk : pet.stats.atk
               const dmg = Math.max(1, Math.floor(ability.basePower * 0.4 + atkStat * 0.6) - nearbyMob.def)

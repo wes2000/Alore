@@ -20,10 +20,10 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   stone:        { id: 'stone',        name: 'Stone',        description: 'A rough grey stone.',           type: ItemType.Resource, rarity: ItemRarity.Common,   stackable: true, maxStack: 500, value: 1,   icon: '🪨' },
   herb_bundle:  { id: 'herb_bundle',  name: 'Herb Bundle',  description: 'A handful of gathered herbs.',  type: ItemType.Resource, rarity: ItemRarity.Common,   stackable: true, maxStack: 200, value: 6,   icon: '🌿' },
   raw_fish:     { id: 'raw_fish',     name: 'Raw Fish',     description: 'A freshly caught fish.',        type: ItemType.Resource, rarity: ItemRarity.Common,   stackable: true, maxStack: 200, value: 5,   icon: '🐟' },
-  slime_gel:    { id: 'slime_gel',    name: 'Slime Gel',    description: 'Gooey substance from slimes.',  type: ItemType.Resource, rarity: ItemRarity.Common,   stackable: true, maxStack: 200, value: 4,   icon: '🫧' },
+  slime_gel:    { id: 'slime_gel',    name: 'Slime Gel',    description: 'Gooey substance from slimes.',  type: ItemType.Resource, rarity: ItemRarity.Common,   stackable: true, maxStack: 200, value: 4,   icon: '💧' },
   wolf_pelt:    { id: 'wolf_pelt',    name: 'Wolf Pelt',    description: 'Thick fur from a wolf.',        type: ItemType.Resource, rarity: ItemRarity.Common,   stackable: true, maxStack: 100, value: 12,  icon: '🦴' },
   feather:      { id: 'feather',      name: 'Feather',      description: 'A light plume feather.',        type: ItemType.Resource, rarity: ItemRarity.Common,   stackable: true, maxStack: 200, value: 3,   icon: '🪶' },
-  beast_claw:   { id: 'beast_claw',   name: 'Beast Claw',   description: 'A sharp claw from a predator.',type: ItemType.Resource, rarity: ItemRarity.Common,   stackable: true, maxStack: 100, value: 8,   icon: '🦾' },
+  beast_claw:   { id: 'beast_claw',   name: 'Beast Claw',   description: 'A sharp claw from a predator.',type: ItemType.Resource, rarity: ItemRarity.Common,   stackable: true, maxStack: 100, value: 8,   icon: '🐾' },
   scale:        { id: 'scale',        name: 'Scale',        description: 'Tough scales from a reptile.',  type: ItemType.Resource, rarity: ItemRarity.Uncommon, stackable: true, maxStack: 100, value: 20,  icon: '🐉' },
   void_essence: { id: 'void_essence', name: 'Void Essence', description: 'Dark energy crystallised.',     type: ItemType.Resource, rarity: ItemRarity.Rare,     stackable: true, maxStack: 50,  value: 80,  icon: '✨' },
   bone:         { id: 'bone',         name: 'Bone',         description: 'A gnawed bone.',                type: ItemType.Resource, rarity: ItemRarity.Common,   stackable: true, maxStack: 200, value: 2,   icon: '🦴' },
@@ -56,7 +56,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   // ─── Processed Resources ──────────────────────────────────────────────────
   cooked_shrimp:{ id: 'cooked_shrimp',name: 'Cooked Shrimp',description: 'Restores 30 HP.',        type: ItemType.Consumable, rarity: ItemRarity.Common, stackable: true, maxStack: 100, value: 8,   icon: '🍤', healAmount: 30 },
   cooked_fish:  { id: 'cooked_fish',  name: 'Cooked Fish',  description: 'Restores 60 HP.',        type: ItemType.Consumable, rarity: ItemRarity.Common, stackable: true, maxStack: 100, value: 15,  icon: '🍖', healAmount: 60 },
-  coal:         { id: 'coal',         name: 'Coal',         description: 'Fuel for the forge.',     type: ItemType.Resource, rarity: ItemRarity.Common,   stackable: true, maxStack: 200, value: 8,   icon: '⬛' },
+  coal:         { id: 'coal',         name: 'Coal',         description: 'Fuel for the forge.',     type: ItemType.Resource, rarity: ItemRarity.Common,   stackable: true, maxStack: 200, value: 8,   icon: '\u{1FAA8}' },
   crossbow_bolt:{ id: 'crossbow_bolt',name: 'Crossbow Bolt',description: 'Iron-tipped bolt.',      type: ItemType.Resource, rarity: ItemRarity.Common,   stackable: true, maxStack: 500, value: 5,   icon: '🔩' },
 
   // ─── Equipment ────────────────────────────────────────────────────────────

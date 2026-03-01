@@ -82,6 +82,12 @@ body {
   animation: pixel-blink 0.8s step-end infinite;
 }
 
+/* Emoji icon rendering — ensures emoji glyphs load from system emoji fonts */
+.emoji-icon {
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Android Emoji', sans-serif;
+  line-height: 1;
+}
+
 /* Scale HUD up on desktop — keeps mobile 1× */
 @media (min-width: 768px) {
   .hud-scale {
