@@ -11,6 +11,11 @@ interface EntityVisual {
   prevY: number
   currX: number
   currY: number
+  // Animation state (for textured entities: mobs, pets, NPCs)
+  animFrames: number     // total frames in strip (0 = no animation)
+  animTick: number       // increments each render call
+  animSpeed: number      // render calls per frame switch
+  entityTexture: THREE.CanvasTexture | null  // null = flat color (player handled separately)
 }
 
 interface SpeechBubble {
@@ -54,16 +59,23 @@ export class EntityRenderer {
     color: number,
     accentColor: number,
     label?: string,
-    size = 0.75
+    size = 0.75,
+    texture?: THREE.CanvasTexture,
+    animFrames = 0,
   ): void {
     if (this.entities.has(id)) {
       this.updatePosition(id, x, y)
       return
     }
 
-    // Body mesh — single draw call per entity (border removed to halve draw calls)
-    const geo = new THREE.PlaneGeometry(size, size)
-    const mat = new THREE.MeshBasicMaterial({ color, transparent: false })
+    // Body mesh — single draw call per entity
+    const geo = new THREE.PlaneGeometry(size, kind === 'npc' ? size * 1.5 : size)
+    let mat: THREE.MeshBasicMaterial
+    if (texture) {
+      mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, color: 0xffffff })
+    } else {
+      mat = new THREE.MeshBasicMaterial({ color, transparent: false })
+    }
     const mesh = new THREE.Mesh(geo, mat)
     mesh.position.set(x + 0.5, -(y + 0.5), 0.5)
 
@@ -87,6 +99,10 @@ export class EntityRenderer {
       labelSprite,
       prevX: x, prevY: y,
       currX: x, currY: y,
+      animFrames: animFrames,
+      animTick: 0,
+      animSpeed: 20,   // ~3 FPS at 60 render calls/sec
+      entityTexture: texture ?? null,
     })
   }
 
@@ -217,6 +233,17 @@ export class EntityRenderer {
       if (id === 'player' && this.playerSpriteApplied && this.sprites?.playerTexture) {
         this.sprites.applyPlayerFrame(this.sprites.playerTexture, this.playerDir, this.playerFrame)
       }
+
+      // Animate mob/pet/NPC 2-frame sprites
+      if (e.entityTexture && e.animFrames >= 2) {
+        e.animTick++
+        if (e.animTick >= e.animSpeed) {
+          e.animTick = 0
+          // Toggle UV offset between frame 0 and frame 1
+          const currentFrame = e.entityTexture.offset.x > 0 ? 0 : 1
+          e.entityTexture.offset.set(currentFrame * (1 / e.animFrames), 0)
+        }
+      }
     }
   }
 
@@ -260,6 +287,127 @@ export class EntityRenderer {
         geo.dispose()
         mat.dispose()
         texture.dispose()
+      }
+    }
+    requestAnimationFrame(tick)
+  }
+
+  /**
+   * Play a death animation: shrink to 0 + white flash over 300ms,
+   * then spawn colored poof particles. Removes the entity after.
+   */
+  playDeathAnimation(id: string, bodyColor: number): void {
+    const e = this.entities.get(id)
+    if (!e) {
+      this.removeEntity(id)
+      return
+    }
+
+    const mesh = e.mesh
+    const mat = mesh.material as THREE.MeshBasicMaterial
+    const wx = e.currX + 0.5
+    const wy = e.currY + 0.5
+
+    // Flash white
+    mat.color.setHex(0xffffff)
+
+    const DURATION = 300
+    const start = performance.now()
+    const origScale = mesh.scale.x
+
+    const tick = () => {
+      const t = Math.min((performance.now() - start) / DURATION, 1)
+      const s = origScale * (1 - t)
+      mesh.scale.set(s, s, 1)
+      mat.opacity = 1 - t
+      mat.transparent = true
+      if (t < 1) {
+        requestAnimationFrame(tick)
+      } else {
+        this.removeEntity(id)
+        // Spawn poof particles
+        this.spawnPoofParticles(wx, wy, bodyColor)
+      }
+    }
+    requestAnimationFrame(tick)
+  }
+
+  /** Spawn 4-5 small colored particles that drift outward and fade. */
+  private spawnPoofParticles(wx: number, wy: number, color: number): void {
+    const count = 4 + Math.floor(Math.random() * 2)
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.5
+      const speed = 0.8 + Math.random() * 0.8
+      const vx = Math.cos(angle) * speed
+      const vy = Math.sin(angle) * speed
+
+      const geo = new THREE.PlaneGeometry(0.15, 0.15)
+      const mat = new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false })
+      const mesh = new THREE.Mesh(geo, mat)
+      mesh.position.set(wx, -wy, 0.6)
+      this.scene.add(mesh)
+
+      const DURATION = 350
+      const start = performance.now()
+
+      const tick = () => {
+        const t = Math.min((performance.now() - start) / DURATION, 1)
+        mesh.position.x = wx + vx * t
+        mesh.position.y = -wy + vy * t
+        mat.opacity = 1 - t
+        const s = 1 - t * 0.5
+        mesh.scale.set(s, s, 1)
+        if (t < 1) {
+          requestAnimationFrame(tick)
+        } else {
+          this.scene.remove(mesh)
+          geo.dispose()
+          mat.dispose()
+        }
+      }
+      requestAnimationFrame(tick)
+    }
+  }
+
+  /**
+   * Spawn a floating damage number at world position.
+   * Rises 0.5 tiles over 600ms and fades out.
+   */
+  spawnDamageNumber(wx: number, wy: number, amount: number, color = '#ffffff'): void {
+    const canvas = document.createElement('canvas')
+    canvas.width = 64
+    canvas.height = 24
+    const ctx = canvas.getContext('2d')!
+    ctx.font = 'bold 14px monospace'
+    ctx.textAlign = 'center'
+    ctx.strokeStyle = 'rgba(0,0,0,0.8)'
+    ctx.lineWidth = 3
+    ctx.strokeText(String(amount), 32, 18)
+    ctx.fillStyle = color
+    ctx.fillText(String(amount), 32, 18)
+
+    const texture = new THREE.CanvasTexture(canvas)
+    texture.minFilter = THREE.LinearFilter
+    const mat = new THREE.SpriteMaterial({ map: texture, transparent: true })
+    const sprite = new THREE.Sprite(mat)
+    sprite.scale.set(0.8, 0.3, 1)
+    sprite.position.set(wx, -wy + 0.3, 0.85)
+    this.scene.add(sprite)
+
+    const DURATION = 600
+    const startY = -wy + 0.3
+    const start = performance.now()
+
+    const tick = () => {
+      const t = Math.min((performance.now() - start) / DURATION, 1)
+      sprite.position.y = startY + t * 0.5
+      mat.opacity = t < 0.5 ? 1 : 1 - (t - 0.5) * 2
+      if (t < 1) {
+        requestAnimationFrame(tick)
+      } else {
+        this.scene.remove(sprite)
+        texture.dispose()
+        mat.dispose()
       }
     }
     requestAnimationFrame(tick)
