@@ -732,9 +732,8 @@ export class GameEngine {
 
     const p = this.playerState
 
-    // Cancel active gather
+    // Ignore interact while gathering — only movement cancels it
     if (this.gatheringSystem.isGathering) {
-      this.gatheringSystem.cancel()
       return
     }
 
