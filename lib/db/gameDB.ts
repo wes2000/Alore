@@ -77,6 +77,7 @@ export async function savePlayer(player: PlayerState): Promise<void> {
         skills:          player.skills as unknown as Record<string, unknown>,
         inventory:       player.inventory as unknown as Record<string, unknown>[],
         equipment:       player.equipment as unknown as Record<string, unknown>,
+        pets:            player.pets as unknown as Record<string, unknown>[],
         discoveredPOIs:  player.discoveredPOIs as unknown as Record<string, unknown>[],
         completedQuests: player.completedQuests as unknown as Record<string, unknown>[],
         activeQuests:    player.activeQuests as unknown as Record<string, unknown>[],
@@ -120,7 +121,7 @@ export async function loadPlayer(playerId: string): Promise<PlayerState | null> 
       skills:          (p.skills as PlayerState['skills']) ?? createAllSkills(),
       inventory:       (p.inventory as PlayerState['inventory']) ?? [],
       equipment:       (p.equipment as PlayerState['equipment']) ?? { weapon: null, offhand: null, body: null },
-      pets:            [],  // loaded separately
+      pets:            (p.pets as PlayerState['pets']) ?? [],
       discoveredPOIs:  (p.discoveredPOIs as string[]) ?? [],
       completedQuests: (p.completedQuests as string[]) ?? [],
       activeQuests:    (p.activeQuests as PlayerState['activeQuests']) ?? [],
