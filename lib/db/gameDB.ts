@@ -98,7 +98,6 @@ export async function loadPlayer(playerId: string): Promise<PlayerState | null> 
     const result = await db.queryOnce({
       players: {
         $: { where: { id: playerId } },
-        pets: {},
       },
     })
 
