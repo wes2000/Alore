@@ -160,31 +160,38 @@ export default function HUD({ engine }: HUDProps) {
         })}
       </div>
 
-      {/* ── Notifications (left side, below vitals — slim toasts) ── */}
-      <div
-        className="absolute left-2 flex flex-col gap-1 items-start"
-        style={{ top: gatherProgress !== null ? 200 : 165, maxWidth: 180, zIndex: 10, pointerEvents: 'none' }}
-      >
-        {notifications.map(n => (
+      {/* ── Notifications (left side, below vitals — scrolling log box) ── */}
+      {notifications.length > 0 && (
+        <div className="absolute left-2" style={{ top: gatherProgress !== null ? 200 : 165, width: 178, zIndex: 10, pointerEvents: 'none' }}>
           <div
-            key={n.id}
-            className="animate-notif-slide"
+            className="custom-scroll"
             style={{
-              padding: '3px 6px',
-              fontSize: 5,
-              lineHeight: '10px',
-              fontFamily: "'Press Start 2P', monospace",
-              color: notifAccent(n.type),
-              background: 'rgba(0,0,0,0.65)',
-              borderLeft: `3px solid ${notifAccent(n.type)}`,
-              whiteSpace: 'nowrap',
-              imageRendering: 'pixelated',
+              ...panel,
+              padding: '5px 7px',
+              maxHeight: 80,
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
             }}
           >
-            {n.message}
+            {notifications.map(n => (
+              <div
+                key={n.id}
+                className="animate-notif-slide"
+                style={{
+                  fontSize: 5,
+                  lineHeight: '9px',
+                  borderLeft: `3px solid ${notifAccent(n.type)}`,
+                  paddingLeft: 5,
+                }}
+              >
+                {n.message}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
 
       {/* ── Interact Prompt (bottom-center, compact) ── */}
       {interactPrompt && (
