@@ -28,6 +28,9 @@ export class QuestSystem {
     eventBus.on('mob:died', (p) => {
       this.updateProgress('kill', p.mobId, 1)
     })
+    eventBus.on('npc:interact', (p) => {
+      this.updateProgress('talk_to_npc', p.npcId, 1)
+    })
     eventBus.on('gather:complete', (p) => {
       this.updateProgress('gather', p.itemId, p.qty)
       this.updateProgress('mine', p.nodeType, p.qty)

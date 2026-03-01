@@ -55,6 +55,8 @@ export function createDefaultPlayer(id: string): PlayerState {
     combatStyle: 'melee',
     comboHitCount: 0,
     lastComboTime: 0,
+    bestiary: {},
+    discoveredChunks: [],
   }
 }
 
@@ -80,6 +82,8 @@ export async function savePlayer(player: PlayerState): Promise<void> {
         activeQuests:    player.activeQuests as unknown as Record<string, unknown>[],
         combatStyle:     player.combatStyle,
         equippedSpellIndex: player.equippedSpellIndex,
+        bestiary:        player.bestiary as unknown as Record<string, unknown>,
+        discoveredChunks: player.discoveredChunks as unknown as Record<string, unknown>[],
         lastSaved:       Date.now(),
       }),
     ])
@@ -126,6 +130,8 @@ export async function loadPlayer(playerId: string): Promise<PlayerState | null> 
       combatStyle:     (p.combatStyle as PlayerState['combatStyle']) ?? 'melee',
       comboHitCount:   0,
       lastComboTime:   0,
+      bestiary:        (p.bestiary as PlayerState['bestiary']) ?? {},
+      discoveredChunks: (p.discoveredChunks as string[]) ?? [],
     }
   } catch (e) {
     console.error('loadPlayer failed:', e)

@@ -386,6 +386,8 @@ export interface PlayerState {
   combatStyle: 'melee' | 'ranged' | 'magic'
   comboHitCount: number       // for melee combo tracker
   lastComboTime: number       // timestamp of last combo hit
+  bestiary: Record<string, BestiaryEntry>
+  discoveredChunks: string[]  // chunkKeys "cx,cy" the player has visited
 }
 
 export interface ChunkState {
@@ -453,4 +455,47 @@ export interface MobInstance {
   isDungeonMob: boolean
   isBoss: boolean
   bossName?: string
+}
+
+// ─── NPC System ───────────────────────────────────────────────────────────────
+
+export enum NPCRole {
+  Shopkeeper = 'Shopkeeper',
+  QuestGiver = 'QuestGiver',
+  Trainer = 'Trainer',
+  Lore = 'Lore',
+}
+
+export interface DialogueChoice {
+  label: string
+  nextNodeId: string | null  // null = end dialogue
+  action?: 'open_shop' | 'start_quest'
+  actionTarget?: string       // quest id or shop id
+}
+
+export interface DialogueNode {
+  id: string
+  text: string
+  choices: DialogueChoice[]
+}
+
+export interface NPCDefinition {
+  id: string
+  name: string
+  role: NPCRole
+  icon: string                // emoji
+  x: number
+  y: number
+  color: number               // THREE.js hex color
+  accentColor: number
+  dialogue: DialogueNode[]
+  shopItems?: string[]         // item IDs this NPC sells (shopkeeper role)
+  questIds?: string[]          // quests this NPC offers
+}
+
+// ─── Bestiary ─────────────────────────────────────────────────────────────────
+
+export interface BestiaryEntry {
+  kills: number
+  tamed: boolean
 }

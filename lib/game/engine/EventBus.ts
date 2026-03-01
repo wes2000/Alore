@@ -1,5 +1,5 @@
 import {
-  SkillType, ComboType, Element, PetInstance, StatusEffect,
+  SkillType, ComboType, Element, PetInstance, StatusEffect, DialogueNode,
 } from '../data/types'
 
 // ─── Event Payload Types ─────────────────────────────────────────────────────
@@ -67,6 +67,11 @@ export interface Events {
   // Interaction prompt (drives HUD hint)
   'interact:nearby':      { label: string }
   'interact:clear':       {}
+
+  // NPC / Dialogue events
+  'npc:interact':         { npcId: string }
+  'dialogue:open':        { npcId: string; npcName: string; npcIcon: string; node: DialogueNode }
+  'dialogue:close':       {}
 
   // Shop events
   'shop:open':            {}

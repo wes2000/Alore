@@ -32,6 +32,8 @@ import { ABILITIES } from './data/abilities'
 import { SPELLS } from './data/spells'
 import { BIOME_DEFINITIONS, TILE_IMPASSABLE } from './data/biomes'
 import { SHOP_BUY_ITEMS, SHOP_NPC_X, SHOP_NPC_Y, SHOP_INTERACT_RANGE, SELL_RATIO } from './data/shop'
+import { NPCSystem } from './systems/NPCSystem'
+import { NPC_DEFINITIONS, getAllNPCs } from './data/npcs'
 
 const PLAYER_SPEED         = 5.0   // tiles per second
 const SPRINT_MULT          = 1.7
@@ -75,6 +77,7 @@ export class GameEngine {
   spellSystem: SpellSystem
   private mobSpawner: MobSpawner
   private gatheringSystem: GatheringSystem
+  npcSystem: NPCSystem
 
   // Sprite rendering
   private spriteManager: SpriteManager
@@ -139,6 +142,7 @@ export class GameEngine {
       (chunkKey, nodeId, nodeType, itemId, qty) =>
         this.onGatherComplete(chunkKey, nodeId, nodeType, itemId, qty)
     )
+    this.npcSystem = new NPCSystem(this.playerState)
 
     // Sprite manager (loads async)
     this.spriteManager = new SpriteManager()
@@ -168,6 +172,8 @@ export class GameEngine {
     if (!this.playerState.combatStyle) this.playerState.combatStyle = 'melee'
     if (this.playerState.comboHitCount == null) this.playerState.comboHitCount = 0
     if (this.playerState.lastComboTime == null) this.playerState.lastComboTime = 0
+    if (!this.playerState.bestiary) this.playerState.bestiary = {}
+    if (!this.playerState.discoveredChunks) this.playerState.discoveredChunks = []
 
     // Initialize quest system (must be after player state is loaded)
     this.questSystem = new QuestSystem(this.playerState, this.skillSystem)
@@ -180,13 +186,15 @@ export class GameEngine {
       undefined
     )
 
-    // Add shopkeeper NPC near spawn
-    this.entityRenderer.addEntity(
-      'npc_shop', 'npc',
-      SHOP_NPC_X, SHOP_NPC_Y,
-      0xFFCC00, 0xFFEE88,
-      'Shop'
-    )
+    // Add all NPCs to the renderer
+    for (const npc of getAllNPCs()) {
+      this.entityRenderer.addEntity(
+        `npc_${npc.id}`, 'npc',
+        npc.x, npc.y,
+        npc.color, npc.accentColor,
+        npc.name
+      )
+    }
 
     this.setupEventListeners()
 
@@ -348,9 +356,10 @@ export class GameEngine {
     this.prevPlayerX = p.x
     this.prevPlayerY = p.y
 
-    // Cancel gathering when player moves
-    if ((move.x !== 0 || move.y !== 0) && this.gatheringSystem.isGathering) {
-      this.gatheringSystem.cancel()
+    // Cancel gathering and dialogue when player moves
+    if (move.x !== 0 || move.y !== 0) {
+      if (this.gatheringSystem.isGathering) this.gatheringSystem.cancel()
+      if (this.npcSystem.isInDialogue) this.npcSystem.closeDialogue()
     }
 
     const isSprinting = input.sprint && (move.x !== 0 || move.y !== 0)
@@ -737,6 +746,11 @@ export class GameEngine {
       return
     }
 
+    // If in dialogue, pass through to NPC system choice handling (handled by UI)
+    if (this.npcSystem.isInDialogue) {
+      return
+    }
+
     // Priority 0: dungeon entry/exit
     const chunk = this.chunkSystem.getChunkAt(Math.floor(p.x), Math.floor(p.y))
     if (chunk.dungeonData && !p.currentDungeon) {
@@ -765,10 +779,10 @@ export class GameEngine {
       }
     }
 
-    // Priority 0.5: open shop if near the shopkeeper NPC
-    const shopDist = Math.hypot(p.x + 0.5 - (SHOP_NPC_X + 0.5), p.y + 0.5 - (SHOP_NPC_Y + 0.5))
-    if (shopDist <= SHOP_INTERACT_RANGE) {
-      eventBus.emit('shop:open', {})
+    // Priority 0.5: interact with nearby NPC
+    const nearbyNPC = this.npcSystem.findNearbyNPC()
+    if (nearbyNPC) {
+      this.npcSystem.interact(nearbyNPC.id)
       return
     }
 
@@ -782,6 +796,10 @@ export class GameEngine {
       })
       if (result.success) {
         this.mobSpawner.damageMob(tameTarget.id, tameTarget.maxHp)
+        // Mark tamed in bestiary
+        const bEntry = this.playerState.bestiary[tameTarget.mobId]
+        if (bEntry) bEntry.tamed = true
+        else this.playerState.bestiary[tameTarget.mobId] = { kills: 0, tamed: true }
       }
       return
     }
@@ -821,10 +839,10 @@ export class GameEngine {
       }
     }
 
-    // Check shopkeeper NPC
-    const shopDist = Math.hypot(p.x + 0.5 - (SHOP_NPC_X + 0.5), p.y + 0.5 - (SHOP_NPC_Y + 0.5))
-    if (shopDist <= SHOP_INTERACT_RANGE) {
-      const label = 'General Store'
+    // Check nearby NPC
+    const npcLabel = this.npcSystem.getNearbyLabel()
+    if (npcLabel) {
+      const label = npcLabel
       if (label !== this.lastInteractLabel) {
         this.lastInteractLabel = label
         eventBus.emit('interact:nearby', { label })
@@ -925,6 +943,14 @@ export class GameEngine {
   private onMobDied(mob: MobInstance): void {
     const def = MOB_DEFINITIONS[mob.mobId]
     if (!def) return
+
+    // Update bestiary
+    const entry = this.playerState.bestiary[mob.mobId]
+    if (entry) {
+      entry.kills++
+    } else {
+      this.playerState.bestiary[mob.mobId] = { kills: 1, tamed: false }
+    }
 
     for (const drop of def.drops) {
       if (Math.random() < drop.chance) {
@@ -1040,6 +1066,10 @@ export class GameEngine {
 
     if (key !== this.prevChunkKey) {
       this.prevChunkKey = key
+      // Track discovered chunks for world map
+      if (!this.playerState.discoveredChunks.includes(key)) {
+        this.playerState.discoveredChunks.push(key)
+      }
       eventBus.emit('world:chunk_entered', { cx, cy })
       this.skillSystem.awardXP(SkillType.Exploration, XP_AWARDS.exploration.new_chunk)
 
@@ -1239,6 +1269,32 @@ export class GameEngine {
     const p = this.playerState
     const chunk = this.chunkSystem.getChunkAt(Math.floor(p.x), Math.floor(p.y))
     return chunk.biome
+  }
+
+  // ─── NPC Dialogue ───────────────────────────────────────────────────────
+
+  /** Handle a dialogue choice from the UI. Returns true if dialogue is still open. */
+  handleDialogueChoice(choiceIndex: number): boolean {
+    const result = this.npcSystem.chooseOption(choiceIndex)
+    if (result?.action === 'open_shop') {
+      eventBus.emit('shop:open', {})
+    }
+    if (result?.action === 'start_quest') {
+      const npcId = this.npcSystem.currentNPCId
+      if (npcId) {
+        const npc = NPC_DEFINITIONS[npcId]
+        if (npc?.questIds) {
+          for (const qId of npc.questIds) {
+            if (this.questSystem.startQuest(qId)) break  // start the first available quest
+          }
+        }
+      }
+      // Emit talk_to_npc for quest objectives
+      if (npcId) {
+        this.questSystem.updateProgress('talk_to_npc', npcId, 1)
+      }
+    }
+    return this.npcSystem.isInDialogue
   }
 
   // ─── Shop ─────────────────────────────────────────────────────────────────
