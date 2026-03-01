@@ -43,7 +43,7 @@ const MAP_RADIUS = 40  // chunks from center to show
 interface Props { engine: GameEngine | null }
 
 export default function MapPanel({ engine }: Props) {
-  const { activePanel, setPanel, playerX, playerY } = useGameStore()
+  const { activePanel, setPanel } = useGameStore()
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -53,9 +53,10 @@ export default function MapPanel({ engine }: Props) {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    // Read player position directly from engine state (store values may be stale)
     const chunkSize = engine.chunkSizeValue
-    const pcx = Math.floor(playerX / chunkSize)
-    const pcy = Math.floor(playerY / chunkSize)
+    const pcx = Math.floor(engine.playerState.x / chunkSize)
+    const pcy = Math.floor(engine.playerState.y / chunkSize)
 
     const width  = (MAP_RADIUS * 2 + 1) * CELL_SIZE
     const height = (MAP_RADIUS * 2 + 1) * CELL_SIZE
@@ -123,7 +124,7 @@ export default function MapPanel({ engine }: Props) {
     ctx.lineWidth = 1
     ctx.strokeRect(cpx - 1, cpy - 1, CELL_SIZE + 2, CELL_SIZE + 2)
 
-  }, [activePanel, engine, playerX, playerY])
+  }, [activePanel, engine]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (activePanel !== 'map') return null
 
