@@ -54,6 +54,11 @@ export interface Events {
   'quest:progress':       { questId: string; objective: string; current: number; required: number }
   'quest:completed':      { questId: string }
 
+  // Combat feedback
+  'combat:mob_missed':    { mobId: string }
+  'combat:crit':          { targetId: string; amount: number }
+  'combat:freeze_shatter': { targetId: string; bonusDamage: number }
+
   // Mob events
   'mob:attack_player':    { mobId: string; damage: number }
   'mob:died':             { mobId: string; x: number; y: number }

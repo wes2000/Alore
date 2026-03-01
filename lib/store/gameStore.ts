@@ -49,6 +49,7 @@ interface GameStore {
   combatStyle: 'melee' | 'ranged' | 'magic'
   activeSpellName: string | null
   playerStatusEffects: string[]
+  comboCount: number
   activeQuestCount: number
 
   // M6: NPC dialogue
@@ -72,6 +73,7 @@ interface GameStore {
   setCombatStyle: (style: 'melee' | 'ranged' | 'magic') => void
   setActiveSpellName:(name: string | null) => void
   setPlayerStatusEffects:(effects: string[]) => void
+  setComboCount:(count: number) => void
   setActiveQuestCount:(count: number) => void
   setDialogue: (dialogue: DialogueState | null) => void
   addNotification:(message: string, type: Notification['type']) => void
@@ -102,6 +104,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   combatStyle:    'melee',
   activeSpellName: null,
   playerStatusEffects: [],
+  comboCount: 0,
   activeQuestCount: 0,
   dialogue: null,
 
@@ -125,6 +128,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setCombatStyle: (style) => set({ combatStyle: style }),
   setActiveSpellName: (name) => set({ activeSpellName: name }),
   setPlayerStatusEffects: (effects) => set({ playerStatusEffects: effects }),
+  setComboCount: (count) => set({ comboCount: count }),
   setActiveQuestCount: (count) => set({ activeQuestCount: count }),
   setDialogue: (dialogue) => set({ dialogue }),
 

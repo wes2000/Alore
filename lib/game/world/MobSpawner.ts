@@ -217,6 +217,13 @@ export class MobSpawner {
     const dy = py - mob.y
     const dist = Math.sqrt(dx * dx + dy * dy)
 
+    // ── Status-effect speed modifier ─────────────────────────────────────
+    // Stun / Freeze / Slow are handled via a speed multiplier in GameEngine.tickMobStatusEffects.
+    // Here we just check if the mob can move / attack at all.
+    const isStunned = mob.statusEffects?.some(s =>
+      s.type === 'Stun' || s.type === 'Freeze'
+    ) ?? false
+
     // ── State transitions ──────────────────────────────────────────────────
     if (dist <= CHASE_RANGE) {
       mob.state = 'chase'
@@ -226,21 +233,37 @@ export class MobSpawner {
 
     // ── Chase AI ──────────────────────────────────────────────────────────
     if (mob.state === 'chase') {
-      if (dist > ATTACK_RANGE) {
-        const spd = mob.spd * dt
+      if (!isStunned && dist > ATTACK_RANGE) {
+        // Apply speed multiplier from status effects
+        let spdMult = 1
+        if (mob.statusEffects?.some(s => s.type === 'Slow')) spdMult *= 0.5
+        const spd = mob.spd * spdMult * dt
         mob.x += (dx / dist) * spd
         mob.y += (dy / dist) * spd
       }
-      // Attack
+      // Attack (stunned/frozen mobs can't attack)
       mob.attackCooldown -= dt
-      if (dist <= ATTACK_RANGE && mob.attackCooldown <= 0) {
+      if (!isStunned && dist <= ATTACK_RANGE && mob.attackCooldown <= 0) {
         mob.attackCooldown = ATTACK_COOLDOWN
-        eventBus.emit('mob:attack_player', { mobId: mob.id, damage: mob.atk })
+        // Blind: 50% miss chance
+        const isBlind = mob.statusEffects?.some(s => s.type === 'Blind') ?? false
+        if (isBlind && Math.random() < 0.5) {
+          // Miss — mob swings but doesn't connect
+          eventBus.emit('combat:mob_missed', { mobId: mob.id })
+        } else {
+          // Weaken/Enrage modify damage
+          let atkMult = 1
+          if (mob.statusEffects?.some(s => s.type === 'Weaken')) atkMult *= 0.75
+          if (mob.statusEffects?.some(s => s.type === 'Enrage')) atkMult *= 1.5
+          const damage = Math.max(1, Math.floor(mob.atk * atkMult))
+          eventBus.emit('mob:attack_player', { mobId: mob.id, damage })
+        }
       }
       return
     }
 
     // ── Wander AI ─────────────────────────────────────────────────────────
+    if (isStunned) return // can't wander while stunned
     mob.wanderTimer -= dt
     if (mob.wanderTimer <= 0) {
       mob.wanderTimer = WANDER_INTERVAL[0] + Math.random() * (WANDER_INTERVAL[1] - WANDER_INTERVAL[0])
@@ -253,7 +276,9 @@ export class MobSpawner {
     const tdy = mob.wanderTargetY - mob.y
     const tdist = Math.sqrt(tdx * tdx + tdy * tdy)
     if (tdist > 0.4) {
-      const spd = WANDER_SPEED * dt
+      let wanderMult = 1
+      if (mob.statusEffects?.some(s => s.type === 'Slow')) wanderMult *= 0.5
+      const spd = WANDER_SPEED * wanderMult * dt
       mob.x += (tdx / tdist) * spd
       mob.y += (tdy / tdist) * spd
     }
