@@ -34,6 +34,7 @@ import { BIOME_DEFINITIONS, TILE_IMPASSABLE } from './data/biomes'
 import { SHOP_BUY_ITEMS, SHOP_NPC_X, SHOP_NPC_Y, SHOP_INTERACT_RANGE, SELL_RATIO } from './data/shop'
 import { NPCSystem } from './systems/NPCSystem'
 import { NPC_DEFINITIONS, getAllNPCs } from './data/npcs'
+import { getMobTexture, getPetTexture, getNPCTexture } from './renderer/EntitySpriteGenerator'
 
 const PLAYER_SPEED         = 5.0   // tiles per second
 const SPRINT_MULT          = 1.7
@@ -186,13 +187,17 @@ export class GameEngine {
       undefined
     )
 
-    // Add all NPCs to the renderer
+    // Add all NPCs to the renderer with procedural sprites
     for (const npc of getAllNPCs()) {
+      const npcTex = getNPCTexture(npc.id, npc.color, npc.accentColor)
       this.entityRenderer.addEntity(
         `npc_${npc.id}`, 'npc',
         npc.x, npc.y,
         npc.color, npc.accentColor,
-        npc.name
+        npc.name,
+        0.75,
+        npcTex,
+        2,
       )
     }
 
@@ -271,6 +276,7 @@ export class GameEngine {
       }
 
       this.entityRenderer.flash('player', 0xff2222, 200)
+      this.entityRenderer.spawnDamageNumber(p.x + 0.5, p.y + 0.5, reduced, '#ff4444')
       this.forceEmitPlayerHP()
       if (p.hp <= 0) {
         eventBus.emit('ui:notification', { message: 'You were defeated!', type: 'danger' })
@@ -444,13 +450,17 @@ export class GameEngine {
       const targetX = p.x + Math.cos(angle) * followRadius - 0.5
       const targetY = p.y + Math.sin(angle) * followRadius - 0.5
 
+      const petColor = getPetColor(pet.definitionId)
+      const petTex = getPetTexture(pet.definitionId, petColor, Element.None)
       this.entityRenderer.addEntity(
         `pet_${pet.instanceId}`, 'pet',
         targetX, targetY,
-        parseInt(getPetColor(pet.definitionId).replace('#', ''), 16),
+        parseInt(petColor.replace('#', ''), 16),
         0xffffff,
         pet.name,
-        0.6
+        0.6,
+        petTex,
+        2,
       )
       // Only ratio here — position synced in render() with interpolation
       this.healthBars.setHealth(`pet_${pet.instanceId}`, pet.stats.hp / pet.stats.maxHp)
@@ -492,7 +502,10 @@ export class GameEngine {
               const result = this.mobSpawner.damageMob(nearbyMob.id, dmg)
 
               this.entityRenderer.spawnAttackEffect(nearbyMob.x + 0.5, nearbyMob.y + 0.5)
-              if (result) this.entityRenderer.flash(`mob_${nearbyMob.id}`, 0xff8800, 120)
+              if (result) {
+                this.entityRenderer.flash(`mob_${nearbyMob.id}`, 0xff8800, 120)
+                this.entityRenderer.spawnDamageNumber(nearbyMob.x + 0.5, nearbyMob.y + 0.5, dmg, '#ffaa44')
+              }
               this.entityRenderer.showSpeechBubble(
                 `pet_${pet.instanceId}`,
                 `${pet.name}: ${ability.name}!`,
@@ -587,6 +600,7 @@ export class GameEngine {
     if (!result) return
 
     this.entityRenderer.flash(`mob_${mob.id}`, 0xff4444, 120)
+    this.entityRenderer.spawnDamageNumber(mob.x + 0.5, mob.y + 0.5, damage, '#ffffff')
     this.skillSystem.awardXP(SkillType.Melee, 4)
 
     // Knockback (Melee 20: Warrior)
@@ -643,7 +657,10 @@ export class GameEngine {
     const result = this.mobSpawner.damageMob(mob.id, finalDmg)
 
     this.entityRenderer.spawnAttackEffect(mob.x + 0.5, mob.y + 0.5)
-    if (result) this.entityRenderer.flash(`mob_${mob.id}`, 0x8844ff, 120)
+    if (result) {
+      this.entityRenderer.flash(`mob_${mob.id}`, 0x8844ff, 120)
+      this.entityRenderer.spawnDamageNumber(mob.x + 0.5, mob.y + 0.5, finalDmg, '#cc88ff')
+    }
 
     // Apply element to target (for combo reactions)
     if (castResult.element !== Element.None) {
@@ -726,7 +743,10 @@ export class GameEngine {
 
     const result = this.mobSpawner.damageMob(mob.id, baseDmg)
     this.entityRenderer.spawnAttackEffect(mob.x + 0.5, mob.y + 0.5)
-    if (result) this.entityRenderer.flash(`mob_${mob.id}`, 0x44ff44, 120)
+    if (result) {
+      this.entityRenderer.flash(`mob_${mob.id}`, 0x44ff44, 120)
+      this.entityRenderer.spawnDamageNumber(mob.x + 0.5, mob.y + 0.5, baseDmg, '#88ff88')
+    }
     this.skillSystem.awardXP(SkillType.Ranged, 4)
 
     if (result?.state === 'dead') {
@@ -917,23 +937,33 @@ export class GameEngine {
       this.liveMobIds.add(id)
 
       const def = MOB_DEFINITIONS[mob.mobId]
+      const mobColor = def?.color ?? 0x888888
+      const mobAccent = def?.accentColor ?? 0xaaaaaa
+      const mobTex = getMobTexture(mob.mobId, mobColor, mobAccent, def?.element ?? Element.None)
       this.entityRenderer.addEntity(
         id, 'mob',
         mob.x, mob.y,
-        def?.color ?? 0x888888,
-        def?.accentColor ?? 0xaaaaaa,
+        mobColor,
+        mobAccent,
         def?.name ?? mob.mobId,
-        0.65
+        0.65,
+        mobTex,
+        2,
       )
       // Only pass the ratio — position is synced in render() with interpolation
       this.healthBars.setHealth(id, mob.hp / mob.maxHp)
       this.mobEntityIds.add(id)
     }
 
-    // Remove despawned mob entities
+    // Remove despawned mob entities (with death animation)
     for (const id of this.mobEntityIds) {
       if (!this.liveMobIds.has(id)) {
-        this.entityRenderer.removeEntity(id)
+        // Extract mob color for death poof particles
+        const mobIdStr = id.replace('mob_', '')
+        const deadMob = Array.from(this.mobSpawner.allMobs).find(m => String(m.id) === mobIdStr)
+        const def = deadMob ? MOB_DEFINITIONS[deadMob.mobId] : null
+        const bodyColor = def?.color ?? 0x888888
+        this.entityRenderer.playDeathAnimation(id, bodyColor)
         this.healthBars.remove(id)
         this.mobEntityIds.delete(id)
       }
