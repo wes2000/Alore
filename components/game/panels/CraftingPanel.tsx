@@ -130,7 +130,7 @@ export default function CraftingPanel({ engine }: Props) {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 14, lineHeight: 1 }}>{outputDef?.icon ?? '?'}</span>
+                  <span className="emoji-icon" style={{ fontSize: 14, lineHeight: 1 }}>{outputDef?.icon ?? '?'}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 5, fontWeight: 'bold' }}>
                       {recipe.name}
