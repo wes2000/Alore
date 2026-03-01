@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { GameEngine } from '@/lib/game/GameEngine'
 import { eventBus } from '@/lib/game/engine/EventBus'
 import { useGameStore } from '@/lib/store/gameStore'
-import { getOrCreatePlayerId, loadPlayer, loadPets, savePlayer, scheduleSave } from '@/lib/db/gameDB'
+import { getOrCreatePlayerId, loadPlayer, loadPets, savePlayer, savePets, scheduleSave } from '@/lib/db/gameDB'
 import HUD from './HUD'
 import MobileControls from './MobileControls'
 import SkillPanel from './panels/SkillPanel'
@@ -76,6 +76,19 @@ export default function GameCanvas() {
     ]
     return () => unsubs.forEach(u => u())
   }, [store])
+
+  // Save on page close/refresh so pet data and progress are never lost
+  useEffect(() => {
+    const onBeforeUnload = () => {
+      const engine = engineRef.current
+      if (!engine) return
+      // Fire-and-forget saves (browser gives ~2s for beforeunload)
+      savePlayer(engine.playerState).catch(() => {})
+      savePets(engine.playerState.id, engine.playerState.pets).catch(() => {})
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [])
 
   // FPS + computed stats polling (stats update rarely so 2s is fine)
   useEffect(() => {
@@ -168,14 +181,20 @@ export default function GameCanvas() {
 
         // 4-second timeout so a slow/offline DB never blocks startup
         const savedPlayer = await withTimeout(loadPlayer(playerId), 4000)
-        const savedPets   = savedPlayer
-          ? (await withTimeout(loadPets(playerId), 4000) ?? [])
-          : []
+
+        // Pets are now saved directly on the player document. Fall back to
+        // the separate pets table for older saves that don't have inline pets.
+        let savedPets = savedPlayer?.pets ?? []
+        if (savedPets.length === 0 && savedPlayer) {
+          const tablePets = await withTimeout(loadPets(playerId), 4000)
+          if (tablePets && tablePets.length > 0) savedPets = tablePets
+        }
 
         setLoadMsg('Building world...')
         engine = new GameEngine(canvas, playerId)
         engineRef.current = engine
 
+        const isNewPlayer = !savedPlayer
         if (savedPlayer) {
           savedPlayer.pets = savedPets
           await engine.init(savedPlayer)
@@ -187,8 +206,8 @@ export default function GameCanvas() {
           savePlayer(engine.playerState).catch(console.error)
         }
 
-        // Give starter pet to new players
-        if (engine.playerState.pets.length === 0) {
+        // Give starter pet to new players only (not returning players whose pets failed to load)
+        if (isNewPlayer && engine.playerState.pets.length === 0) {
           const pet = engine.petSystem.createPetInstance('grass_slime', 3)
           engine.petSystem.addPet(pet)
           engine.petSystem.activatePet(pet.instanceId, 0)
