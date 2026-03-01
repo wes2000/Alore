@@ -374,23 +374,29 @@ export class EntityRenderer {
    * Rises 0.5 tiles over 600ms and fades out.
    */
   spawnDamageNumber(wx: number, wy: number, amount: number, color = '#ffffff'): void {
+    this.spawnFloatingText(wx, wy, String(amount), color)
+  }
+
+  /** Spawn a floating text label (damage number, "Miss", "CRIT!", etc.) */
+  spawnFloatingText(wx: number, wy: number, text: string, color = '#ffffff', scale = 1): void {
     const canvas = document.createElement('canvas')
-    canvas.width = 64
-    canvas.height = 24
+    canvas.width = 96
+    canvas.height = 28
     const ctx = canvas.getContext('2d')!
-    ctx.font = 'bold 14px monospace'
+    const fontSize = Math.round(14 * scale)
+    ctx.font = `bold ${fontSize}px monospace`
     ctx.textAlign = 'center'
     ctx.strokeStyle = 'rgba(0,0,0,0.8)'
     ctx.lineWidth = 3
-    ctx.strokeText(String(amount), 32, 18)
+    ctx.strokeText(text, 48, 22)
     ctx.fillStyle = color
-    ctx.fillText(String(amount), 32, 18)
+    ctx.fillText(text, 48, 22)
 
     const texture = new THREE.CanvasTexture(canvas)
     texture.minFilter = THREE.LinearFilter
     const mat = new THREE.SpriteMaterial({ map: texture, transparent: true })
     const sprite = new THREE.Sprite(mat)
-    sprite.scale.set(0.8, 0.3, 1)
+    sprite.scale.set(0.8 * scale, 0.3 * scale, 1)
     sprite.position.set(wx, -wy + 0.3, 0.85)
     this.scene.add(sprite)
 

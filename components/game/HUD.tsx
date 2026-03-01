@@ -45,7 +45,7 @@ export default function HUD({ engine }: HUDProps) {
     interactPrompt, gatherProgress, gatherNodeType,
     playerATK, playerDEF, shopOpen,
     inDungeon, dungeonTier, combatStyle, activeSpellName,
-    playerStatusEffects, activeQuestCount,
+    playerStatusEffects, comboCount, activeQuestCount,
   } = useGameStore()
 
   const hpPct     = Math.max(0, playerHP / Math.max(1, playerMaxHP))
@@ -86,14 +86,35 @@ export default function HUD({ engine }: HUDProps) {
               <span style={{ color: '#A060E0' }}>{activeSpellName}</span>
             )}
           </div>
+          {/* Combo counter */}
+          {comboCount >= 2 && (
+            <div style={{
+              fontSize: 6, marginTop: 3, fontWeight: 'bold',
+              color: comboCount >= 8 ? '#ffee00' : comboCount >= 5 ? '#ff8844' : comboCount >= 3 ? '#ff6644' : YELLOW,
+            }}>
+              COMBO x{comboCount}
+              {comboCount >= 8 ? ' FINISHER!' : comboCount >= 5 ? ' CLEAVE!' : comboCount >= 3 ? ' +20%' : ''}
+            </div>
+          )}
           {/* Status effects on player */}
           {playerStatusEffects.length > 0 && (
             <div style={{ display: 'flex', gap: 3, marginTop: 3, fontSize: 4 }}>
-              {playerStatusEffects.map((se, i) => (
-                <span key={i} style={{ color: se === 'Burn' ? RED : se === 'Slow' ? BLUE : se === 'Weaken' ? '#A060E0' : SHADOW, border: `1px solid ${BLACK}`, padding: '1px 3px' }}>
-                  {se}
-                </span>
-              ))}
+              {playerStatusEffects.map((se, i) => {
+                const color =
+                  se === 'Burn'    ? RED :
+                  se === 'Poison'  ? '#44cc44' :
+                  se === 'Slow'    ? BLUE :
+                  se === 'Stun'    ? YELLOW :
+                  se === 'Freeze'  ? '#88ddff' :
+                  se === 'Blind'   ? '#666666' :
+                  se === 'Weaken'  ? '#A060E0' :
+                  se === 'Enrage'  ? '#ff4444' : SHADOW
+                return (
+                  <span key={i} style={{ color, border: `1px solid ${BLACK}`, padding: '1px 3px' }}>
+                    {se}
+                  </span>
+                )
+              })}
             </div>
           )}
         </div>

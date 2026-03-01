@@ -234,6 +234,13 @@ export class GameEngine {
       this.entityRenderer.flash(targetId, 0x44ff44, 120)
     })
 
+    // Mob missed (blinded)
+    eventBus.on('combat:mob_missed', () => {
+      this.entityRenderer.spawnFloatingText(
+        this.playerState.x + 0.5, this.playerState.y + 0.5, 'Miss', '#999999',
+      )
+    })
+
     // Mob attacks player
     eventBus.on('mob:attack_player', ({ mobId, damage }) => {
       const p = this.playerState
@@ -261,21 +268,18 @@ export class GameEngine {
       // Apply status effects from mob's element
       const mob = Array.from(this.mobSpawner.mobValues()).find(m => m.id === mobId)
       if (mob && mob.element && mob.element !== Element.None) {
-        const statusMap: Partial<Record<Element, StatusEffect>> = {
-          [Element.Fire]: StatusEffect.Burn,
-          [Element.Water]: StatusEffect.Slow,
-          [Element.Shadow]: StatusEffect.Weaken,
+        const statusMap: Partial<Record<Element, { status: StatusEffect; power: number; duration: number }>> = {
+          [Element.Fire]:      { status: StatusEffect.Burn,   power: 8, duration: 4 },
+          [Element.Water]:     { status: StatusEffect.Slow,   power: 1, duration: 3 },
+          [Element.Earth]:     { status: StatusEffect.Stun,   power: 1, duration: 1 },
+          [Element.Lightning]: { status: StatusEffect.Stun,   power: 1, duration: 0.8 },
+          [Element.Shadow]:    { status: StatusEffect.Weaken, power: 1, duration: 5 },
+          [Element.Wind]:      { status: StatusEffect.Slow,   power: 1, duration: 2 },
+          [Element.Arcane]:    { status: StatusEffect.Blind,  power: 1, duration: 2 },
         }
-        const status = statusMap[mob.element]
-        if (status && Math.random() < 0.3) {
-          if (!p.playerStatusEffects) p.playerStatusEffects = []
-          p.playerStatusEffects = p.playerStatusEffects.filter(s => s.type !== status)
-          const power = status === StatusEffect.Burn ? 8 : 1
-          p.playerStatusEffects.push({ type: status, duration: 4, power, sourceId: mob.id })
-          eventBus.emit('ui:notification', {
-            message: `${status} applied!`,
-            type: 'danger',
-          })
+        const info = statusMap[mob.element]
+        if (info && Math.random() < 0.25) {
+          this.statusEffectSystem.applyToPlayer(p, info.status, info.duration, info.power, mob.id)
         }
       }
 
@@ -372,6 +376,14 @@ export class GameEngine {
       if (this.npcSystem.isInDialogue) this.npcSystem.closeDialogue()
     }
 
+    // Stun/Freeze: prevent all player movement and actions
+    const playerSpeedMult = this.statusEffectSystem.getPlayerSpeedMultiplier(p)
+    if (playerSpeedMult === 0) {
+      // Player is stunned/frozen — skip movement entirely
+      p.energy = Math.min(p.maxEnergy, p.energy + ENERGY_REGEN * dt)
+      return
+    }
+
     const isSprinting = input.sprint && (move.x !== 0 || move.y !== 0)
     let speed = PLAYER_SPEED
 
@@ -381,6 +393,9 @@ export class GameEngine {
     } else {
       p.energy = Math.min(p.maxEnergy, p.energy + ENERGY_REGEN * dt)
     }
+
+    // Apply Slow status effect to movement speed
+    speed *= playerSpeedMult
 
     const vitalityBonus = 1 + (this.skillSystem.getSkillLevel(SkillType.Vitality) - 1) * 0.001
 
@@ -599,6 +614,9 @@ export class GameEngine {
     if (!this.inputSystem.wasJustPressed('attack')) return
     if (this.playerAttackCooldown > 0) return
 
+    // Stun/Freeze prevents attacking
+    if (!this.statusEffectSystem.canPlayerAct(this.playerState)) return
+
     const p = this.playerState
     const weapon = p.equipment?.weapon ? ITEM_DEFINITIONS[p.equipment.weapon] : null
 
@@ -622,23 +640,25 @@ export class GameEngine {
     // Melee attack
     const mob = this.mobSpawner.getMobAt(p.x + 0.5, p.y + 0.5, atkRange)
 
-    // Check melee combo tracker (Melee 30: Swordsman)
+    // ── Melee Combo System ──────────────────────────────────────────────────
     const meleeLvl = this.skillSystem.getSkillLevel(SkillType.Melee)
     const now = performance.now()
-    if (meleeLvl >= 30 && (now - p.lastComboTime) < 1500) {
+    const COMBO_WINDOW = 1500 // ms
+
+    if ((now - p.lastComboTime) < COMBO_WINDOW) {
       p.comboHitCount++
-      if (p.comboHitCount >= 3) {
-        // Free third hit: no cooldown
-        p.comboHitCount = 0
-        this.playerAttackCooldown = 0
-      } else {
-        this.playerAttackCooldown = PLAYER_ATTACK_COOLDOWN
-      }
     } else {
       p.comboHitCount = 1
-      this.playerAttackCooldown = PLAYER_ATTACK_COOLDOWN
     }
     p.lastComboTime = now
+
+    // Combo cooldown reduction:
+    // Swordsman (Melee 30): free 3rd hit
+    if (meleeLvl >= 30 && p.comboHitCount % 3 === 0) {
+      this.playerAttackCooldown = 0
+    } else {
+      this.playerAttackCooldown = PLAYER_ATTACK_COOLDOWN
+    }
 
     // Blade Dancer (Melee 50): 10% chance to skip cooldown
     if (Math.random() < this.skillSystem.getBladeDanceChance()) {
@@ -661,16 +681,76 @@ export class GameEngine {
       return
     }
 
-    // Calculate damage with equipped weapon bonus
+    // Calculate base damage with equipped weapon bonus
     const weaponAtk = weapon?.statBonus?.atk ?? 0
-    const damage = Math.max(1, PLAYER_ATTACK_BASE_DMG + (meleeLvl - 1) * 2 + weaponAtk - mob.def)
+    let damage = Math.max(1, PLAYER_ATTACK_BASE_DMG + (meleeLvl - 1) * 2 + weaponAtk - mob.def)
+
+    // ── Combo bonuses ───────────────────────────────────────────────────────
+    // Combo 3: +20% damage
+    if (p.comboHitCount >= 3 && p.comboHitCount < 5) {
+      damage = Math.floor(damage * 1.2)
+    }
+    // Combo 5: AoE cleave (hits nearby mobs for 60% damage)
+    if (p.comboHitCount >= 5 && p.comboHitCount < 8) {
+      damage = Math.floor(damage * 1.3)
+      for (const aoeMob of this.mobSpawner.allMobs) {
+        if (aoeMob.id === mob.id || aoeMob.state === 'dead') continue
+        const dist = Math.sqrt((aoeMob.x - mob.x) ** 2 + (aoeMob.y - mob.y) ** 2)
+        if (dist <= 2.5) {
+          const aoeDmg = Math.max(1, Math.floor(damage * 0.6))
+          const aoeResult = this.mobSpawner.damageMob(aoeMob.id, aoeDmg)
+          if (aoeResult) {
+            this.entityRenderer.flash(`mob_${aoeMob.id}`, 0xff8844, 120)
+            this.entityRenderer.spawnDamageNumber(aoeMob.x + 0.5, aoeMob.y + 0.5, aoeDmg, '#ff8844')
+            if (aoeResult.state === 'dead') this.onMobDied(aoeResult)
+          }
+        }
+      }
+    }
+    // Combo 8+: guaranteed crit (2x damage)
+    if (p.comboHitCount >= 8) {
+      damage = Math.floor(damage * 2)
+      p.comboHitCount = 0 // reset combo after ultimate hit
+    }
+
+    // ── Freeze Shatter ──────────────────────────────────────────────────────
+    const shatterMult = this.statusEffectSystem.checkFreezeShatter(mob)
+    if (shatterMult > 1) {
+      damage = Math.floor(damage * shatterMult)
+      eventBus.emit('combat:freeze_shatter', { targetId: mob.id, bonusDamage: damage })
+      this.entityRenderer.flash(`mob_${mob.id}`, 0x88ddff, 200)
+      this.entityRenderer.spawnDamageNumber(mob.x + 0.5, mob.y + 0.3, damage, '#88ddff')
+    }
+
+    // ── Crit roll ───────────────────────────────────────────────────────────
+    const luckLvl = this.skillSystem.getSkillLevel(SkillType.Luck)
+    const isCrit = this.combatSystem.rollCrit(0.05, luckLvl)
+    if (isCrit) {
+      damage = Math.floor(damage * 2)
+      eventBus.emit('combat:crit', { targetId: mob.id, amount: damage })
+    }
 
     const result = this.mobSpawner.damageMob(mob.id, damage)
     if (!result) return
 
-    this.entityRenderer.flash(`mob_${mob.id}`, 0xff4444, 120)
-    this.entityRenderer.spawnDamageNumber(mob.x + 0.5, mob.y + 0.5, damage, '#ffffff')
+    // Visual feedback
+    if (isCrit) {
+      this.entityRenderer.flash(`mob_${mob.id}`, 0xffee00, 200)
+      this.entityRenderer.spawnDamageNumber(mob.x + 0.5, mob.y + 0.5, damage, '#ffee00')
+    } else {
+      this.entityRenderer.flash(`mob_${mob.id}`, 0xff4444, 120)
+      this.entityRenderer.spawnDamageNumber(mob.x + 0.5, mob.y + 0.5, damage, '#ffffff')
+    }
     this.skillSystem.awardXP(SkillType.Melee, 4)
+
+    // Combo notification at milestones
+    if (p.comboHitCount === 3) {
+      eventBus.emit('ui:notification', { message: 'Combo x3! +20% damage', type: 'info' })
+    } else if (p.comboHitCount === 5) {
+      eventBus.emit('ui:notification', { message: 'Combo x5! AoE Cleave!', type: 'success' })
+    } else if (p.comboHitCount === 8) {
+      eventBus.emit('ui:notification', { message: 'Combo x8! Critical Finisher!', type: 'success' })
+    }
 
     // Knockback (Melee 20: Warrior)
     if (Math.random() < this.skillSystem.getKnockbackChance()) {
@@ -705,6 +785,26 @@ export class GameEngine {
 
     this.playerAttackCooldown = castResult.cooldown
 
+    // ── Self-targeting spells ─────────────────────────────────────────────
+    if (spell.id === 'purify') {
+      p.playerStatusEffects = []
+      eventBus.emit('ui:notification', { message: 'Debuffs purified!', type: 'success' })
+      this.entityRenderer.flash('player', 0xffffff, 300)
+      this.skillSystem.awardXP(SkillType.Magic, 6)
+      return
+    }
+    if (spell.id === 'stone_skin') {
+      // Temporary DEF boost (handled as a status-like buff: reuse Weaken inverted)
+      // For simplicity: heal 20% maxHP as a shield-like effect
+      const shield = Math.floor(p.maxHp * 0.2)
+      p.hp = Math.min(p.maxHp, p.hp + shield)
+      eventBus.emit('ui:notification', { message: `Stone Skin! +${shield} HP`, type: 'success' })
+      this.entityRenderer.flash('player', 0x886644, 300)
+      this.forceEmitPlayerHP()
+      this.skillSystem.awardXP(SkillType.Magic, 6)
+      return
+    }
+
     // Find target within spell range
     const mob = this.mobSpawner.getMobAt(p.x + 0.5, p.y + 0.5, castResult.range)
     if (!mob) {
@@ -722,13 +822,40 @@ export class GameEngine {
 
     const damage = this.spellSystem.calculateDamage(castResult)
     const defStat = mob.mdef ?? mob.def
-    const finalDmg = Math.max(1, damage - Math.floor(defStat * 0.3))
+    let finalDmg = Math.max(1, damage - Math.floor(defStat * 0.3))
+
+    // Freeze shatter
+    const shatterMult = this.statusEffectSystem.checkFreezeShatter(mob)
+    if (shatterMult > 1) {
+      finalDmg = Math.floor(finalDmg * shatterMult)
+      this.entityRenderer.flash(`mob_${mob.id}`, 0x88ddff, 200)
+    }
+
+    // Crit roll
+    const luckLvl = this.skillSystem.getSkillLevel(SkillType.Luck)
+    const isCrit = this.combatSystem.rollCrit(0.05, luckLvl)
+    if (isCrit) finalDmg = Math.floor(finalDmg * 2)
+
     const result = this.mobSpawner.damageMob(mob.id, finalDmg)
 
     this.entityRenderer.spawnAttackEffect(mob.x + 0.5, mob.y + 0.5)
     if (result) {
-      this.entityRenderer.flash(`mob_${mob.id}`, 0x8844ff, 120)
-      this.entityRenderer.spawnDamageNumber(mob.x + 0.5, mob.y + 0.5, finalDmg, '#cc88ff')
+      if (isCrit) {
+        this.entityRenderer.flash(`mob_${mob.id}`, 0xffee00, 200)
+        this.entityRenderer.spawnDamageNumber(mob.x + 0.5, mob.y + 0.5, finalDmg, '#ffee00')
+      } else {
+        this.entityRenderer.flash(`mob_${mob.id}`, 0x8844ff, 120)
+        this.entityRenderer.spawnDamageNumber(mob.x + 0.5, mob.y + 0.5, finalDmg, '#cc88ff')
+      }
+    }
+
+    // Life Drain: heal player for 50% of damage dealt
+    if (spell.id === 'life_drain' && result) {
+      const healAmt = Math.floor(finalDmg * 0.5)
+      p.hp = Math.min(p.maxHp, p.hp + healAmt)
+      this.entityRenderer.flash('player', 0x44ff44, 150)
+      this.entityRenderer.spawnFloatingText(p.x + 0.5, p.y + 0.3, `+${healAmt}`, '#44ff44')
+      this.forceEmitPlayerHP()
     }
 
     // Apply element to target (for combo reactions)
@@ -738,7 +865,8 @@ export class GameEngine {
 
     // Apply status effect
     if (castResult.statusEffect && Math.random() < (castResult.statusChance ?? 0)) {
-      const power = castResult.statusEffect === StatusEffect.Burn ? 8 : 1
+      const power = castResult.statusEffect === StatusEffect.Burn ? 8 :
+                    castResult.statusEffect === StatusEffect.Poison ? 5 : 1
       this.statusEffectSystem.applyToMob(mob, castResult.statusEffect, castResult.statusDuration ?? 3, power, 'player')
     }
 
@@ -749,7 +877,11 @@ export class GameEngine {
         const dist = Math.sqrt((aoeMob.x - mob.x) ** 2 + (aoeMob.y - mob.y) ** 2)
         if (dist <= castResult.aoeRadius) {
           const aoeDmg = Math.max(1, Math.floor(finalDmg * 0.6))
-          this.mobSpawner.damageMob(aoeMob.id, aoeDmg)
+          const aoeResult = this.mobSpawner.damageMob(aoeMob.id, aoeDmg)
+          if (aoeResult) {
+            this.entityRenderer.spawnDamageNumber(aoeMob.x + 0.5, aoeMob.y + 0.5, aoeDmg, '#cc88ff')
+            if (aoeResult.state === 'dead') this.onMobDied(aoeResult)
+          }
         }
       }
     }
@@ -804,17 +936,39 @@ export class GameEngine {
     const dist = Math.sqrt((mob.x - p.x) ** 2 + (mob.y - p.y) ** 2)
     baseDmg = Math.floor(baseDmg * (1 + this.skillSystem.getRangedDamageBonus(dist)))
 
-    // Headshot (Ranged 30: Sharpshooter)
-    if (Math.random() < this.skillSystem.getHeadshotChance()) {
-      baseDmg = Math.floor(baseDmg * 1.5)
-      eventBus.emit('ui:notification', { message: 'Headshot!', type: 'success' })
+    // Headshot (Ranged 30: Sharpshooter) — 15% chance for 2x damage at Ranged 50+
+    const headChance = this.skillSystem.getHeadshotChance()
+    const isHeadshot = Math.random() < headChance
+    if (isHeadshot) {
+      baseDmg = Math.floor(baseDmg * (rangedLvl >= 50 ? 2.0 : 1.5))
     }
+
+    // Freeze shatter on hit
+    const shatterMult = this.statusEffectSystem.checkFreezeShatter(mob)
+    if (shatterMult > 1) {
+      baseDmg = Math.floor(baseDmg * shatterMult)
+      this.entityRenderer.flash(`mob_${mob.id}`, 0x88ddff, 200)
+    }
+
+    // Crit roll
+    const luckLvl = this.skillSystem.getSkillLevel(SkillType.Luck)
+    const isCrit = this.combatSystem.rollCrit(0.05, luckLvl)
+    if (isCrit) baseDmg = Math.floor(baseDmg * 2)
 
     const result = this.mobSpawner.damageMob(mob.id, baseDmg)
     this.entityRenderer.spawnAttackEffect(mob.x + 0.5, mob.y + 0.5)
     if (result) {
-      this.entityRenderer.flash(`mob_${mob.id}`, 0x44ff44, 120)
-      this.entityRenderer.spawnDamageNumber(mob.x + 0.5, mob.y + 0.5, baseDmg, '#88ff88')
+      if (isHeadshot) {
+        this.entityRenderer.flash(`mob_${mob.id}`, 0xff4444, 200)
+        this.entityRenderer.spawnDamageNumber(mob.x + 0.5, mob.y + 0.5, baseDmg, '#ff4444')
+        eventBus.emit('ui:notification', { message: 'Headshot!', type: 'success' })
+      } else if (isCrit) {
+        this.entityRenderer.flash(`mob_${mob.id}`, 0xffee00, 200)
+        this.entityRenderer.spawnDamageNumber(mob.x + 0.5, mob.y + 0.5, baseDmg, '#ffee00')
+      } else {
+        this.entityRenderer.flash(`mob_${mob.id}`, 0x44ff44, 120)
+        this.entityRenderer.spawnDamageNumber(mob.x + 0.5, mob.y + 0.5, baseDmg, '#88ff88')
+      }
     }
     this.skillSystem.awardXP(SkillType.Ranged, 4)
 
@@ -1215,36 +1369,37 @@ export class GameEngine {
   private tickMobStatusEffects(dt: number): void {
     for (const mob of this.mobSpawner.mobValues()) {
       if (mob.state === 'dead') continue
-      const burnDmg = this.statusEffectSystem.tickMob(mob, dt)
-      if (burnDmg > 0) {
-        const result = this.mobSpawner.damageMob(mob.id, burnDmg)
+      const { dotDamage } = this.statusEffectSystem.tickMob(mob, dt)
+      if (dotDamage > 0) {
+        const result = this.mobSpawner.damageMob(mob.id, dotDamage)
         if (result) {
-          this.entityRenderer.flash(`mob_${mob.id}`, 0xff6600, 100)
+          // Burn = orange flash, Poison = green flash
+          const hasBurn = this.statusEffectSystem.hasStatus(mob, StatusEffect.Burn)
+          const flashColor = hasBurn ? 0xff6600 : 0x44cc44
+          this.entityRenderer.flash(`mob_${mob.id}`, flashColor, 100)
+          this.entityRenderer.spawnDamageNumber(
+            mob.x + 0.5, mob.y + 0.5, dotDamage,
+            hasBurn ? '#ff6600' : '#44cc44',
+          )
           if (result.state === 'dead') this.onMobDied(result)
         }
       }
-      // Apply speed modifier to mob movement
-      const spdMult = this.statusEffectSystem.getSpeedMultiplier(mob)
-      if (spdMult === 0) mob.state = 'wander' // Stunned
     }
   }
 
   private tickPlayerStatusEffects(dt: number): void {
     const p = this.playerState
-    if (!p.playerStatusEffects || p.playerStatusEffects.length === 0) return
-
-    p.playerStatusEffects = p.playerStatusEffects.filter(effect => {
-      effect.duration -= dt
-      if (effect.type === StatusEffect.Burn) {
-        const dmg = Math.floor(effect.power * dt)
-        if (dmg > 0) {
-          p.hp = Math.max(0, p.hp - dmg)
-          this.entityRenderer.flash('player', 0xff4400, 80)
-          this.forceEmitPlayerHP()
-        }
-      }
-      return effect.duration > 0
-    })
+    const dotDmg = this.statusEffectSystem.tickPlayer(p, dt)
+    if (dotDmg > 0) {
+      p.hp = Math.max(0, p.hp - dotDmg)
+      const hasBurn = this.statusEffectSystem.playerHasStatus(p, StatusEffect.Burn)
+      this.entityRenderer.flash('player', hasBurn ? 0xff4400 : 0x44cc44, 80)
+      this.entityRenderer.spawnDamageNumber(
+        p.x + 0.5, p.y + 0.5, dotDmg,
+        hasBurn ? '#ff4400' : '#44cc44',
+      )
+      this.forceEmitPlayerHP()
+    }
   }
 
   // ─── Equipment ─────────────────────────────────────────────────────────

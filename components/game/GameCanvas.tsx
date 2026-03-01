@@ -66,6 +66,23 @@ export default function GameCanvas() {
       eventBus.on('dialogue:close',        ()                 => store.setDialogue(null)),
       eventBus.on('shop:open',             ()                 => store.setShopOpen(true)),
       eventBus.on('shop:close',            ()                 => store.setShopOpen(false)),
+      // Sync player status effects to store when applied or ticked
+      eventBus.on('combat:status_applied', ({ entityId }) => {
+        if (entityId === 'player') {
+          const engine = engineRef.current
+          if (!engine) return
+          store.setPlayerStatusEffects(engine.playerState.playerStatusEffects.map(s => s.type))
+        }
+      }),
+      // Sync combo count on damage events for responsive HUD
+      eventBus.on('combat:damage', () => {
+        const engine = engineRef.current
+        if (!engine) return
+        const now = performance.now()
+        const combo = (now - engine.playerState.lastComboTime < 1500)
+          ? engine.playerState.comboHitCount : 0
+        store.setComboCount(combo)
+      }),
       eventBus.on('save:requested', async () => {
         const engine = engineRef.current
         if (!engine) return
@@ -98,6 +115,14 @@ export default function GameCanvas() {
       store.setFPS(engine.fps)
       const { atk, def } = engine.getComputedStats()
       store.setPlayerStats(atk, def)
+      // Sync status effects and combo to HUD
+      const effects = engine.playerState.playerStatusEffects?.map(s => s.type) ?? []
+      store.setPlayerStatusEffects(effects)
+      // Combo count (reset display if window expired)
+      const now = performance.now()
+      const combo = (now - engine.playerState.lastComboTime < 1500)
+        ? engine.playerState.comboHitCount : 0
+      store.setComboCount(combo)
     }, 2000)
     return () => clearInterval(tick)
   }, [store])
