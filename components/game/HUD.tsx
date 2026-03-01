@@ -54,7 +54,7 @@ export default function HUD({ engine }: HUDProps) {
   const hpColor   = hpPct > 0.5 ? GREEN : hpPct > 0.25 ? YELLOW : RED
 
   return (
-    <div className="pointer-events-none absolute inset-0 select-none">
+    <div className="pointer-events-none absolute inset-0 select-none hud-scale">
 
       {/* ── Top-left: Vitals ── */}
       <div className="absolute left-2 top-2 flex flex-col gap-1.5" style={{ width: 178 }}>

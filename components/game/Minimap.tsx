@@ -25,14 +25,13 @@ const POI_COLORS: Record<string, string> = {
   dungeon:    '#e03030',
   shop:       '#00e8e8',
   questGiver: '#f0c800',
-  npc:        '#f0c800',
 }
 
-const MINI_RADIUS = 8   // chunks visible in each direction
-const MINI_PX     = 3   // pixels per chunk tile
-const MAP_SIZE    = (MINI_RADIUS * 2 + 1) * MINI_PX  // 51px
+const MINI_RADIUS = 6   // chunks visible in each direction
+const MINI_PX     = 5   // pixels per chunk tile
+const MAP_SIZE    = (MINI_RADIUS * 2 + 1) * MINI_PX  // 65px
 
-// Pre-compute NPC chunk positions
+// Pre-compute NPC list
 const NPC_LIST = getAllNPCs()
 
 interface MinimapProps {
@@ -69,15 +68,15 @@ export default function Minimap({ engine }: MinimapProps) {
           ctx.fillStyle = BIOME_COLOR[chunk.biome] ?? '#444'
           ctx.fillRect(px, py, MINI_PX, MINI_PX)
 
-          // Dungeon marker
+          // Dungeon marker — fill entire cell
           if (chunk.dungeonData) {
             ctx.fillStyle = POI_COLORS.dungeon
-            ctx.fillRect(px + 1, py + 1, MINI_PX - 2, MINI_PX - 2)
+            ctx.fillRect(px, py, MINI_PX, MINI_PX)
           }
         }
       }
 
-      // Draw NPC markers (shops, quest givers, etc.)
+      // Draw NPC markers — fill entire cell so they're visible
       for (const npc of NPC_LIST) {
         const ncx = Math.floor(npc.x / chunkSize)
         const ncy = Math.floor(npc.y / chunkSize)
@@ -91,12 +90,17 @@ export default function Minimap({ engine }: MinimapProps) {
         ctx.fillStyle = npc.role === NPCRole.Shopkeeper
           ? POI_COLORS.shop
           : POI_COLORS.questGiver
-        ctx.fillRect(px + 1, py + 1, MINI_PX - 2, MINI_PX - 2)
+        ctx.fillRect(px, py, MINI_PX, MINI_PX)
       }
 
-      // Player dot (always on top)
+      // Player dot (always on top) — centered in cell with outline
+      const ppx = MINI_RADIUS * MINI_PX
+      const ppy = MINI_RADIUS * MINI_PX
       ctx.fillStyle = '#ffffff'
-      ctx.fillRect(MINI_RADIUS * MINI_PX + 1, MINI_RADIUS * MINI_PX + 1, MINI_PX - 2, MINI_PX - 2)
+      ctx.fillRect(ppx + 1, ppy + 1, MINI_PX - 2, MINI_PX - 2)
+      ctx.strokeStyle = '#000000'
+      ctx.lineWidth = 1
+      ctx.strokeRect(ppx + 0.5, ppy + 0.5, MINI_PX - 1, MINI_PX - 1)
     }
 
     draw()

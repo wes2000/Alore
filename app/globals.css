@@ -81,3 +81,10 @@ body {
 .pixel-blink {
   animation: pixel-blink 0.8s step-end infinite;
 }
+
+/* Scale HUD up on desktop — keeps mobile 1× */
+@media (min-width: 768px) {
+  .hud-scale {
+    zoom: 2;
+  }
+}
