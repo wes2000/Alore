@@ -110,7 +110,7 @@ export default function HUD({ engine }: HUDProps) {
       <div className="absolute right-2 top-2 flex flex-col items-end gap-1.5">
         <div style={{ ...panel, padding: '6px 8px', textAlign: 'right', lineHeight: '15px' }}>
           <div style={{ fontSize: 7, color: GOLD }}>{playerGold.toLocaleString()} G</div>
-          <div style={{ fontSize: 5, marginTop: 3 }}>{biomeName.toUpperCase()}</div>
+          <div style={{ fontSize: 5, marginTop: 3 }}>{inDungeon ? <span style={{ color: RED }}>DUNGEON T{dungeonTier}</span> : biomeName.toUpperCase()}</div>
           <div style={{ fontSize: 4, marginTop: 2, color: SHADOW }}>{fps} FPS</div>
         </div>
         <div style={{ border: `3px solid ${BLACK}`, boxShadow: `3px 3px 0 ${BLACK}`, lineHeight: 0 }}>
@@ -160,22 +160,25 @@ export default function HUD({ engine }: HUDProps) {
         })}
       </div>
 
-      {/* ── Notifications (top-center, below HUD panels) ── */}
+      {/* ── Notifications (left side, below vitals — slim toasts) ── */}
       <div
-        className="absolute left-1/2 -translate-x-1/2 flex flex-col gap-1.5 items-center"
-        style={{ top: 130, maxWidth: 240, zIndex: 10, pointerEvents: 'none' }}
+        className="absolute left-2 flex flex-col gap-1 items-start"
+        style={{ top: gatherProgress !== null ? 200 : 165, maxWidth: 180, zIndex: 10, pointerEvents: 'none' }}
       >
         {notifications.map(n => (
           <div
             key={n.id}
-            className="animate-fade-in"
+            className="animate-notif-slide"
             style={{
-              ...panel,
-              padding: '5px 8px',
-              fontSize: 6,
-              lineHeight: '12px',
-              borderLeft: `5px solid ${notifAccent(n.type)}`,
+              padding: '3px 6px',
+              fontSize: 5,
+              lineHeight: '10px',
+              fontFamily: "'Press Start 2P', monospace",
+              color: notifAccent(n.type),
+              background: 'rgba(0,0,0,0.65)',
+              borderLeft: `3px solid ${notifAccent(n.type)}`,
               whiteSpace: 'nowrap',
+              imageRendering: 'pixelated',
             }}
           >
             {n.message}
@@ -183,23 +186,25 @@ export default function HUD({ engine }: HUDProps) {
         ))}
       </div>
 
-      {/* ── Interact Prompt (above mobile controls) ── */}
+      {/* ── Interact Prompt (bottom-center, compact) ── */}
       {interactPrompt && (
-        <div className="absolute left-1/2 -translate-x-1/2" style={{ bottom: 265 }}>
-          <div style={{ ...panel, padding: '6px 12px', fontSize: 6 }}>
-            ▶ {interactPrompt}
+        <div className="absolute left-1/2 -translate-x-1/2" style={{ bottom: 290, zIndex: 10 }}>
+          <div style={{
+            padding: '3px 10px',
+            fontSize: 5,
+            fontFamily: "'Press Start 2P', monospace",
+            color: GOLD,
+            background: 'rgba(0,0,0,0.6)',
+            border: `1px solid ${GOLD}`,
+            whiteSpace: 'nowrap',
+            imageRendering: 'pixelated' as const,
+          }}>
+            [E] {interactPrompt}
           </div>
         </div>
       )}
 
-      {/* ── Dungeon indicator ── */}
-      {inDungeon && (
-        <div className="absolute left-1/2 -translate-x-1/2 top-2">
-          <div style={{ ...panel, padding: '4px 10px', fontSize: 6, color: RED, background: '#2A1A1A', borderColor: RED }}>
-            DUNGEON T{dungeonTier}
-          </div>
-        </div>
-      )}
+      {/* Dungeon indicator removed from center — integrated into top-right info panel */}
 
       {/* ── Quest badge on QST button ── */}
       {activeQuestCount > 0 && (
