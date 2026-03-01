@@ -53,10 +53,15 @@ function generateResourceNodes(
   const nodes: ResourceNodeState[] = []
   const def = BIOME_DEFINITIONS[biome]
   let nodeId = 0
+  const occupied = new Set<string>()   // track tiles that already have a node
 
   for (const entry of def.resourceTable) {
     for (let ty = 0; ty < CHUNK_SIZE; ty++) {
       for (let tx = 0; tx < CHUNK_SIZE; tx++) {
+        // Only one resource node per tile
+        const tileKey = `${tx}_${ty}`
+        if (occupied.has(tileKey)) continue
+
         // Cluster: bias placement near existing nodes
         let density = entry.density
         if (entry.cluster && nodes.length > 0) {
@@ -80,6 +85,7 @@ function generateResourceNodes(
             if (!hasNearbyWater) continue
           }
 
+          occupied.add(tileKey)
           nodes.push({
             id: `${cx}_${cy}_${nodeId++}`,
             type: entry.nodeType,

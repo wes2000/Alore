@@ -1305,24 +1305,20 @@ export class GameEngine {
 
   /** Handle a dialogue choice from the UI. Returns true if dialogue is still open. */
   handleDialogueChoice(choiceIndex: number): boolean {
+    // Capture NPC ID before chooseOption — it may close the dialogue and null the ref
+    const npcId = this.npcSystem.currentNPCId
     const result = this.npcSystem.chooseOption(choiceIndex)
     if (result?.action === 'open_shop') {
       eventBus.emit('shop:open', {})
     }
-    if (result?.action === 'start_quest') {
-      const npcId = this.npcSystem.currentNPCId
-      if (npcId) {
-        const npc = NPC_DEFINITIONS[npcId]
-        if (npc?.questIds) {
-          for (const qId of npc.questIds) {
-            if (this.questSystem.startQuest(qId)) break  // start the first available quest
-          }
+    if (result?.action === 'start_quest' && npcId) {
+      const npc = NPC_DEFINITIONS[npcId]
+      if (npc?.questIds) {
+        for (const qId of npc.questIds) {
+          if (this.questSystem.startQuest(qId)) break  // start the first available quest
         }
       }
-      // Emit talk_to_npc for quest objectives
-      if (npcId) {
-        this.questSystem.updateProgress('talk_to_npc', npcId, 1)
-      }
+      this.questSystem.updateProgress('talk_to_npc', npcId, 1)
     }
     return this.npcSystem.isInDialogue
   }
