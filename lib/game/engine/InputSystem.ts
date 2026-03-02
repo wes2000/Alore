@@ -19,11 +19,16 @@ export interface InputState {
   openInventory: boolean
   openMap: boolean
 
-  // Pet ability triggers
-  pet0Ability1: boolean
-  pet0Ability2: boolean
-  pet1Ability1: boolean
-  pet1Ability2: boolean
+  // Hotbar slots (1-9)
+  hotbar1: boolean
+  hotbar2: boolean
+  hotbar3: boolean
+  hotbar4: boolean
+  hotbar5: boolean
+  hotbar6: boolean
+  hotbar7: boolean
+  hotbar8: boolean
+  hotbar9: boolean
 
   // Raw mouse
   mouseX: number
@@ -37,7 +42,8 @@ const defaultState = (): InputState => ({
   moveUp: false, moveDown: false, moveLeft: false, moveRight: false, sprint: false,
   interact: false, attack: false, ability1: false, ability2: false, dodge: false,
   openSkills: false, openPets: false, openInventory: false, openMap: false,
-  pet0Ability1: false, pet0Ability2: false, pet1Ability1: false, pet1Ability2: false,
+  hotbar1: false, hotbar2: false, hotbar3: false, hotbar4: false, hotbar5: false,
+  hotbar6: false, hotbar7: false, hotbar8: false, hotbar9: false,
   mouseX: 0, mouseY: 0, mouseDown: false, mouseWorldX: 0, mouseWorldY: 0,
 })
 
@@ -61,15 +67,22 @@ const KEY_BINDINGS: Record<string, keyof InputState> = {
   'KeyP':       'openPets',
   'Tab':        'openInventory',
   'KeyM':       'openMap',
-  'Digit1':     'pet0Ability1',
-  'Digit2':     'pet0Ability2',
-  'Digit3':     'pet1Ability1',
-  'Digit4':     'pet1Ability2',
+  'Digit1':     'hotbar1',
+  'Digit2':     'hotbar2',
+  'Digit3':     'hotbar3',
+  'Digit4':     'hotbar4',
+  'Digit5':     'hotbar5',
+  'Digit6':     'hotbar6',
+  'Digit7':     'hotbar7',
+  'Digit8':     'hotbar8',
+  'Digit9':     'hotbar9',
 }
 
 // Keys that should be treated as toggle (pressed once = event)
 const TOGGLE_KEYS = new Set<keyof InputState>([
   'interact', 'openSkills', 'openPets', 'openInventory', 'openMap',
+  'hotbar1', 'hotbar2', 'hotbar3', 'hotbar4', 'hotbar5',
+  'hotbar6', 'hotbar7', 'hotbar8', 'hotbar9',
 ])
 
 export class InputSystem {

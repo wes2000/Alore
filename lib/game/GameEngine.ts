@@ -345,6 +345,7 @@ export class GameEngine {
       this.spellSystem.cycleSpell()
     }
 
+    this.handleHotbar()
     this.handlePlayerAttack()
     this.handleInteract()
     if (this.tickCount % NEARBY_CHECK_TICKS === 0) this.checkNearbyInteractions()
@@ -606,6 +607,70 @@ export class GameEngine {
         }
       }
     })
+  }
+
+  // ─── Combat ──────────────────────────────────────────────────────────────
+
+  // ─── Hotbar ─────────────────────────────────────────────────────────────
+
+  /** Hotbar slot assignments: slot index (0-8) → itemId or null */
+  hotbarSlots: (string | null)[] = [null, null, null, null, null, null, null, null, null]
+
+  private handleHotbar(): void {
+    const keys = [
+      'hotbar1', 'hotbar2', 'hotbar3', 'hotbar4', 'hotbar5',
+      'hotbar6', 'hotbar7', 'hotbar8', 'hotbar9',
+    ] as const
+    for (let i = 0; i < 9; i++) {
+      if (this.inputSystem.wasJustPressed(keys[i])) {
+        this.useHotbarSlot(i)
+        break
+      }
+    }
+  }
+
+  /** Assign an item to a hotbar slot */
+  assignHotbar(slot: number, itemId: string | null): void {
+    if (slot < 0 || slot > 8) return
+    this.hotbarSlots[slot] = itemId
+  }
+
+  /** Use the item in a hotbar slot */
+  useHotbarSlot(slot: number): void {
+    const itemId = this.hotbarSlots[slot]
+    if (!itemId) return
+
+    const p = this.playerState
+    const invItem = p.inventory.find(i => i.itemId === itemId)
+    if (!invItem || invItem.quantity <= 0) {
+      eventBus.emit('ui:notification', { message: 'Item not in inventory!', type: 'warning' })
+      return
+    }
+
+    const def = ITEM_DEFINITIONS[itemId]
+    if (!def) return
+
+    // Consumables with healAmount
+    if (def.healAmount && def.healAmount > 0) {
+      if (p.hp >= p.maxHp) {
+        eventBus.emit('ui:notification', { message: 'HP already full!', type: 'info' })
+        return
+      }
+      p.hp = Math.min(p.maxHp, p.hp + def.healAmount)
+      invItem.quantity--
+      if (invItem.quantity <= 0) {
+        const idx = p.inventory.indexOf(invItem)
+        if (idx !== -1) p.inventory.splice(idx, 1)
+      }
+      this.entityRenderer.flash('player', 0x44ff44, 150)
+      this.entityRenderer.spawnFloatingText(p.x + 0.5, p.y + 0.3, `+${def.healAmount}`, '#44ff44')
+      this.forceEmitPlayerHP()
+      eventBus.emit('ui:notification', { message: `Used ${def.name}! +${def.healAmount} HP`, type: 'success' })
+      eventBus.emit('hotbar:used', { slot, itemId })
+      return
+    }
+
+    eventBus.emit('ui:notification', { message: `Cannot quick-use ${def.name}`, type: 'warning' })
   }
 
   // ─── Combat ──────────────────────────────────────────────────────────────

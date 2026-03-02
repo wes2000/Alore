@@ -1,11 +1,9 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { GameEngine } from '@/lib/game/GameEngine'
 import { useGameStore } from '@/lib/store/gameStore'
-import { BIOME_DEFINITIONS } from '@/lib/game/data/biomes'
 import { NPC_DEFINITIONS } from '@/lib/game/data/npcs'
-import { BiomeType } from '@/lib/game/data/types'
 
 const CREAM  = '#F0E8C8'
 const BLACK  = '#181818'
@@ -46,14 +44,13 @@ export default function MapPanel({ engine }: Props) {
   const { activePanel, setPanel } = useGameStore()
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  useEffect(() => {
-    if (activePanel !== 'map' || !engine || !canvasRef.current) return
+  const drawMap = useCallback(() => {
+    if (!engine || !canvasRef.current) return
 
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Read player position directly from engine state (store values may be stale)
     const chunkSize = engine.chunkSizeValue
     const pcx = Math.floor(engine.playerState.x / chunkSize)
     const pcy = Math.floor(engine.playerState.y / chunkSize)
@@ -114,17 +111,25 @@ export default function MapPanel({ engine }: Props) {
       ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE)
     }
 
-    // Draw player dot (center, blinking handled by CSS)
-    const cpx = MAP_RADIUS * CELL_SIZE
-    const cpy = MAP_RADIUS * CELL_SIZE
+    // Draw player position within chunk (sub-chunk precision)
+    const playerSubX = (engine.playerState.x / chunkSize) - pcx // 0..1 within chunk
+    const playerSubY = (engine.playerState.y / chunkSize) - pcy
+    const cpx = MAP_RADIUS * CELL_SIZE + playerSubX * CELL_SIZE
+    const cpy = MAP_RADIUS * CELL_SIZE + playerSubY * CELL_SIZE
     ctx.fillStyle = '#ffffff'
-    ctx.fillRect(cpx, cpy, CELL_SIZE, CELL_SIZE)
-    // White outline for visibility
+    ctx.fillRect(Math.floor(cpx), Math.floor(cpy), CELL_SIZE, CELL_SIZE)
     ctx.strokeStyle = '#ffffff'
     ctx.lineWidth = 1
-    ctx.strokeRect(cpx - 1, cpy - 1, CELL_SIZE + 2, CELL_SIZE + 2)
+    ctx.strokeRect(Math.floor(cpx) - 1, Math.floor(cpy) - 1, CELL_SIZE + 2, CELL_SIZE + 2)
+  }, [engine])
 
-  }, [activePanel, engine]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Draw on open and poll every 500ms while the map is open for live position updates
+  useEffect(() => {
+    if (activePanel !== 'map' || !engine) return
+    drawMap()
+    const interval = setInterval(drawMap, 500)
+    return () => clearInterval(interval)
+  }, [activePanel, engine, drawMap])
 
   if (activePanel !== 'map') return null
 

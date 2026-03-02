@@ -82,6 +82,9 @@ export interface Events {
   'shop:open':            {}
   'shop:close':           {}
 
+  // Hotbar events
+  'hotbar:used':          { slot: number; itemId: string }
+
   // Save events
   'save:requested':       {}
   'save:completed':       {}
