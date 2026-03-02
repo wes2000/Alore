@@ -49,12 +49,46 @@ export default function Hotbar({ engine }: Props) {
     if (!engine) return
     const itemId = e.dataTransfer.getData('text/plain')
     if (!itemId) return
+    // Dropping a hotbar item onto another slot = move it
+    const sourceSlot = e.dataTransfer.getData('hotbar-slot')
+    if (sourceSlot !== '') {
+      const srcIdx = parseInt(sourceSlot)
+      if (!isNaN(srcIdx)) {
+        // Swap slots
+        const srcItem = engine.hotbarSlots[srcIdx]
+        const destItem = engine.hotbarSlots[slot]
+        engine.assignHotbar(slot, srcItem)
+        engine.assignHotbar(srcIdx, destItem)
+        forceUpdate(n => n + 1)
+        return
+      }
+    }
     const def = ITEM_DEFINITIONS[itemId]
     if (!def) return
     // Only allow consumables and taming items on hotbar
     if (def.type !== ItemType.Consumable && def.type !== ItemType.TamingItem) return
     engine.assignHotbar(slot, itemId)
     forceUpdate(n => n + 1)
+  }, [engine])
+
+  // Drag from hotbar slot
+  const handleDragStart = useCallback((e: React.DragEvent, slot: number) => {
+    if (!engine) return
+    const itemId = engine.hotbarSlots[slot]
+    if (!itemId) { e.preventDefault(); return }
+    e.dataTransfer.setData('text/plain', itemId)
+    e.dataTransfer.setData('hotbar-slot', String(slot))
+    e.dataTransfer.effectAllowed = 'move'
+  }, [engine])
+
+  // If dragged out and not dropped on a valid target, clear the slot
+  const handleDragEnd = useCallback((e: React.DragEvent, slot: number) => {
+    if (!engine) return
+    // dropEffect 'none' means it wasn't dropped on a valid drop target
+    if (e.dataTransfer.dropEffect === 'none') {
+      engine.assignHotbar(slot, null)
+      forceUpdate(n => n + 1)
+    }
   }, [engine])
 
   if (!engine) return null
@@ -86,6 +120,9 @@ export default function Hotbar({ engine }: Props) {
               key={i}
               onClick={() => handleSlotClick(i)}
               onContextMenu={(e) => handleRightClick(e, i)}
+              draggable={!!def}
+              onDragStart={(e) => handleDragStart(e, i)}
+              onDragEnd={(e) => handleDragEnd(e, i)}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => handleDrop(e, i)}
               style={{
