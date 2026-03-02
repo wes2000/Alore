@@ -11,6 +11,7 @@ import QuestPanel from './panels/QuestPanel'
 import DialoguePanel from './panels/DialoguePanel'
 import BestiaryPanel from './panels/BestiaryPanel'
 import MapPanel from './panels/MapPanel'
+import Hotbar from './Hotbar'
 
 const CREAM  = '#F0E8C8'
 const BLACK  = '#181818'
@@ -268,6 +269,9 @@ export default function HUD({ engine }: HUDProps) {
       {/* ── World Map overlay ── */}
       <MapPanel engine={engine} />
 
+      {/* ── Hotbar (bottom center) ── */}
+      <Hotbar engine={engine} />
+
       {/* ── Controls hint (desktop only) ── */}
       <div
         className="absolute left-2 bottom-3 hidden md:block"
@@ -275,7 +279,7 @@ export default function HUD({ engine }: HUDProps) {
       >
         <div>WASD MOVE  SHIFT SPRINT</div>
         <div>SPACE ATK  E INTERACT</div>
-        <div>Q SPELL  C CRAFT  J QUEST</div>
+        <div>Q SPELL  1-9 HOTBAR</div>
       </div>
     </div>
   )

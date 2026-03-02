@@ -154,6 +154,8 @@ export default function InventoryPanel({ engine }: Props) {
                     onClick={() => useItem(item)}
                     onMouseEnter={(e) => showTooltip(e, def, rarity, false)}
                     onMouseLeave={hideTooltip}
+                    draggable
+                    onDragStart={(e) => e.dataTransfer.setData('text/plain', item.itemId)}
                   >
                     <div className="text-lg text-center emoji-icon">{def.icon}</div>
                     {item.quantity > 1 && (
