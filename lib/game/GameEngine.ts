@@ -833,6 +833,19 @@ export class GameEngine {
     }
   }
 
+  // Element → spell color mapping for animations
+  private static readonly SPELL_COLORS: Record<string, { main: number; trail: number; dmgText: string }> = {
+    [Element.Fire]:      { main: 0xff4400, trail: 0xff8844, dmgText: '#ff6622' },
+    [Element.Water]:     { main: 0x2288ff, trail: 0x66bbff, dmgText: '#44aaff' },
+    [Element.Earth]:     { main: 0x886622, trail: 0xaa8844, dmgText: '#aa8844' },
+    [Element.Lightning]: { main: 0xffee00, trail: 0xffffaa, dmgText: '#ffee44' },
+    [Element.Wind]:      { main: 0x88ccaa, trail: 0xbbeecc, dmgText: '#88cc88' },
+    [Element.Shadow]:    { main: 0x6622aa, trail: 0x9944dd, dmgText: '#9944dd' },
+    [Element.Light]:     { main: 0xffffff, trail: 0xffffcc, dmgText: '#ffffaa' },
+    [Element.Arcane]:    { main: 0x8844ff, trail: 0xbb88ff, dmgText: '#cc88ff' },
+    [Element.None]:      { main: 0x8844ff, trail: 0xbb88ff, dmgText: '#cc88ff' },
+  }
+
   private handleStaffAttack(range: number): void {
     const p = this.playerState
     const spell = this.spellSystem.getCurrentSpell()
@@ -849,39 +862,72 @@ export class GameEngine {
     }
 
     this.playerAttackCooldown = castResult.cooldown
+    const colors = GameEngine.SPELL_COLORS[castResult.element] ?? GameEngine.SPELL_COLORS[Element.Arcane]
 
     // ── Self-targeting spells ─────────────────────────────────────────────
     if (spell.id === 'purify') {
       p.playerStatusEffects = []
       eventBus.emit('ui:notification', { message: 'Debuffs purified!', type: 'success' })
       this.entityRenderer.flash('player', 0xffffff, 300)
+      this.entityRenderer.spawnAoEEffect(p.x + 0.5, p.y + 0.5, 1.5, 0xffffff)
       this.skillSystem.awardXP(SkillType.Magic, 6)
       return
     }
     if (spell.id === 'stone_skin') {
-      // Temporary DEF boost (handled as a status-like buff: reuse Weaken inverted)
-      // For simplicity: heal 20% maxHP as a shield-like effect
       const shield = Math.floor(p.maxHp * 0.2)
       p.hp = Math.min(p.maxHp, p.hp + shield)
       eventBus.emit('ui:notification', { message: `Stone Skin! +${shield} HP`, type: 'success' })
       this.entityRenderer.flash('player', 0x886644, 300)
+      this.entityRenderer.spawnAoEEffect(p.x + 0.5, p.y + 0.5, 1.0, 0x886644)
       this.forceEmitPlayerHP()
       this.skillSystem.awardXP(SkillType.Magic, 6)
+      return
+    }
+
+    // Self-centered AoE (frost_nova, thunder_clap, etc.)
+    const isSelfAoE = castResult.range === 0 && castResult.aoeRadius > 0
+
+    if (isSelfAoE) {
+      this.entityRenderer.spawnAoEEffect(p.x + 0.5, p.y + 0.5, castResult.aoeRadius, colors.main)
+      // Damage all mobs in range
+      for (const aoeMob of this.mobSpawner.allMobs) {
+        if (aoeMob.state === 'dead') continue
+        const dist = Math.sqrt((aoeMob.x - p.x) ** 2 + (aoeMob.y - p.y) ** 2)
+        if (dist <= castResult.aoeRadius) {
+          const damage = this.spellSystem.calculateDamage(castResult)
+          const defStat = aoeMob.mdef ?? aoeMob.def
+          let dmg = Math.max(1, damage - Math.floor(defStat * 0.3))
+          const luckLvl = this.skillSystem.getSkillLevel(SkillType.Luck)
+          const isCrit = this.combatSystem.rollCrit(0.05, luckLvl)
+          if (isCrit) dmg = Math.floor(dmg * 2)
+          const res = this.mobSpawner.damageMob(aoeMob.id, dmg)
+          if (res) {
+            this.entityRenderer.spawnDamageNumber(aoeMob.x + 0.5, aoeMob.y + 0.5, dmg, isCrit ? '#ffee00' : colors.dmgText)
+            this.skillSystem.awardXP(SkillType.Magic, Math.floor(dmg * 0.3))
+            if (castResult.statusEffect && Math.random() < (castResult.statusChance ?? 0)) {
+              const power = castResult.statusEffect === StatusEffect.Burn ? 8 :
+                            castResult.statusEffect === StatusEffect.Poison ? 5 : 1
+              this.statusEffectSystem.applyToMob(aoeMob, castResult.statusEffect, castResult.statusDuration ?? 3, power, 'player')
+            }
+            if (res.state === 'dead') this.onMobDied(res)
+          }
+        }
+      }
       return
     }
 
     // Find target within spell range
     const mob = this.mobSpawner.getMobAt(p.x + 0.5, p.y + 0.5, castResult.range)
     if (!mob) {
+      // Fire projectile in facing direction (miss)
       const dirOffsets: Record<string, { x: number; y: number }> = {
         right: { x: 1, y: 0 }, left: { x: -1, y: 0 },
         down:  { x: 0, y: 1 }, up:   { x: 0,  y: -1 },
       }
       const off = dirOffsets[this.playerDir] ?? { x: 0, y: 1 }
-      this.entityRenderer.spawnAttackEffect(
-        p.x + 0.5 + off.x * castResult.range * 0.5,
-        p.y + 0.5 + off.y * castResult.range * 0.5,
-      )
+      const tx = p.x + 0.5 + off.x * castResult.range
+      const ty = p.y + 0.5 + off.y * castResult.range
+      this.entityRenderer.spawnSpellProjectile(p.x + 0.5, p.y + 0.5, tx, ty, colors.main, colors.trail)
       return
     }
 
@@ -901,17 +947,28 @@ export class GameEngine {
     const isCrit = this.combatSystem.rollCrit(0.05, luckLvl)
     if (isCrit) finalDmg = Math.floor(finalDmg * 2)
 
+    // Spawn animated projectile from player to mob
+    const mobX = mob.x + 0.5, mobY = mob.y + 0.5
+    this.entityRenderer.spawnSpellProjectile(
+      p.x + 0.5, p.y + 0.5, mobX, mobY,
+      colors.main, colors.trail,
+    )
+
     const result = this.mobSpawner.damageMob(mob.id, finalDmg)
 
-    this.entityRenderer.spawnAttackEffect(mob.x + 0.5, mob.y + 0.5)
     if (result) {
       if (isCrit) {
         this.entityRenderer.flash(`mob_${mob.id}`, 0xffee00, 200)
         this.entityRenderer.spawnDamageNumber(mob.x + 0.5, mob.y + 0.5, finalDmg, '#ffee00')
       } else {
-        this.entityRenderer.flash(`mob_${mob.id}`, 0x8844ff, 120)
-        this.entityRenderer.spawnDamageNumber(mob.x + 0.5, mob.y + 0.5, finalDmg, '#cc88ff')
+        this.entityRenderer.flash(`mob_${mob.id}`, colors.main, 120)
+        this.entityRenderer.spawnDamageNumber(mob.x + 0.5, mob.y + 0.5, finalDmg, colors.dmgText)
       }
+    }
+
+    // Award Magic XP per hit (on top of cast XP)
+    if (result) {
+      this.skillSystem.awardXP(SkillType.Magic, Math.floor(finalDmg * 0.3))
     }
 
     // Life Drain: heal player for 50% of damage dealt
@@ -935,8 +992,9 @@ export class GameEngine {
       this.statusEffectSystem.applyToMob(mob, castResult.statusEffect, castResult.statusDuration ?? 3, power, 'player')
     }
 
-    // AoE damage
+    // AoE damage (for targeted AoE spells like earth_spike, inferno_wave)
     if (castResult.aoeRadius > 0) {
+      this.entityRenderer.spawnAoEEffect(mob.x + 0.5, mob.y + 0.5, castResult.aoeRadius, colors.main)
       for (const aoeMob of this.mobSpawner.allMobs) {
         if (aoeMob.id === mob.id || aoeMob.state === 'dead') continue
         const dist = Math.sqrt((aoeMob.x - mob.x) ** 2 + (aoeMob.y - mob.y) ** 2)
@@ -944,7 +1002,7 @@ export class GameEngine {
           const aoeDmg = Math.max(1, Math.floor(finalDmg * 0.6))
           const aoeResult = this.mobSpawner.damageMob(aoeMob.id, aoeDmg)
           if (aoeResult) {
-            this.entityRenderer.spawnDamageNumber(aoeMob.x + 0.5, aoeMob.y + 0.5, aoeDmg, '#cc88ff')
+            this.entityRenderer.spawnDamageNumber(aoeMob.x + 0.5, aoeMob.y + 0.5, aoeDmg, colors.dmgText)
             if (aoeResult.state === 'dead') this.onMobDied(aoeResult)
           }
         }
@@ -1658,6 +1716,25 @@ export class GameEngine {
       def:       this.skillSystem.getPlayerDEF(),
       maxHp:     this.playerState.maxHp,
       maxEnergy: this.playerState.maxEnergy,
+    }
+  }
+
+  /** Get the currently equipped spell's name (for HUD display). */
+  getActiveSpellName(): string | null {
+    return this.spellSystem.getCurrentSpell()?.name ?? null
+  }
+
+  /** Get all unlocked spells for the spell panel. */
+  getUnlockedSpells() {
+    return this.spellSystem.getUnlockedSpells()
+  }
+
+  /** Set equipped spell by index. */
+  setEquippedSpell(index: number): void {
+    this.playerState.equippedSpellIndex = index
+    const spell = this.spellSystem.getCurrentSpell()
+    if (spell) {
+      eventBus.emit('ui:notification', { message: `Spell: ${spell.name}`, type: 'info' })
     }
   }
 

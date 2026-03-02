@@ -21,8 +21,11 @@ export const SHOP_BUY_ITEMS: ShopListing[] = [
   { id: 'soothe_balm',   price: 60  },
   { id: 'beast_collar',  price: 350 },
   { id: 'bronze_sword',  price: 60  },
+  { id: 'oak_staff',     price: 80  },
+  { id: 'short_bow',     price: 70  },
   { id: 'leather_chaps', price: 70  },
   { id: 'iron_shield',   price: 120 },
+  { id: 'feather',       price: 5   },
 ]
 
 // Items sell back at this fraction of their base value
