@@ -20,7 +20,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
   ])
 }
 
-const ZOOM_MIN = 0.25
+const ZOOM_MIN = 0.35
 const ZOOM_MAX = 4.0
 const ZOOM_STEP = 0.15
 

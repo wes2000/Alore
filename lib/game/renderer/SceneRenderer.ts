@@ -74,7 +74,7 @@ export class SceneRenderer {
   }
 
   setZoom(z: number): void {
-    this.zoom = Math.max(0.5, Math.min(3.0, z))
+    this.zoom = Math.max(0.35, Math.min(3.0, z))
     this.rebuildCamera()
   }
 

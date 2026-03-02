@@ -35,14 +35,14 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   mithril_bar:  { id: 'mithril_bar',  name: 'Mithril Bar',  description: 'Rare mithril ingot.',           type: ItemType.Resource, rarity: ItemRarity.Rare,     stackable: true, maxStack: 100, value: 250, icon: '🔩' },
 
   // ─── Consumables ──────────────────────────────────────────────────────────
-  hp_potion_s:  { id: 'hp_potion_s',  name: 'Minor Heal',   description: 'Restores 40 HP.',               type: ItemType.Consumable, rarity: ItemRarity.Common,   stackable: true, maxStack: 100, value: 20,  icon: '🧪' },
-  hp_potion_m:  { id: 'hp_potion_m',  name: 'Heal Potion',  description: 'Restores 120 HP.',              type: ItemType.Consumable, rarity: ItemRarity.Common,   stackable: true, maxStack: 100, value: 55,  icon: '🧪' },
-  hp_potion_l:  { id: 'hp_potion_l',  name: 'Super Heal',   description: 'Restores 280 HP.',              type: ItemType.Consumable, rarity: ItemRarity.Uncommon, stackable: true, maxStack: 50,  value: 140, icon: '🧪' },
+  hp_potion_s:  { id: 'hp_potion_s',  name: 'Minor Heal',   description: 'Restores 40 HP.',               type: ItemType.Consumable, rarity: ItemRarity.Common,   stackable: true, maxStack: 100, value: 20,  icon: '🧪', healAmount: 40 },
+  hp_potion_m:  { id: 'hp_potion_m',  name: 'Heal Potion',  description: 'Restores 120 HP.',              type: ItemType.Consumable, rarity: ItemRarity.Common,   stackable: true, maxStack: 100, value: 55,  icon: '🧪', healAmount: 120 },
+  hp_potion_l:  { id: 'hp_potion_l',  name: 'Super Heal',   description: 'Restores 280 HP.',              type: ItemType.Consumable, rarity: ItemRarity.Uncommon, stackable: true, maxStack: 50,  value: 140, icon: '🧪', healAmount: 280 },
   energy_pot:   { id: 'energy_pot',   name: 'Energy Pot',   description: 'Restores 50 energy.',           type: ItemType.Consumable, rarity: ItemRarity.Common,   stackable: true, maxStack: 100, value: 30,  icon: '⚡' },
   atk_potion:   { id: 'atk_potion',   name: 'Attack Potion',description: '+10% ATK for 3 minutes.',       type: ItemType.Consumable, rarity: ItemRarity.Common,   stackable: true, maxStack: 50,  value: 80,  icon: '⚗️' },
   def_potion:   { id: 'def_potion',   name: 'Defence Brew', description: '+10% DEF for 3 minutes.',       type: ItemType.Consumable, rarity: ItemRarity.Common,   stackable: true, maxStack: 50,  value: 80,  icon: '⚗️' },
-  grilled_trout:{ id: 'grilled_trout',name: 'Grilled Trout',description: 'Restores 80 HP.',               type: ItemType.Consumable, rarity: ItemRarity.Common,   stackable: true, maxStack: 100, value: 25,  icon: '🍖' },
-  cooked_salmon:{ id: 'cooked_salmon',name: 'Cooked Salmon',description: 'Restores 140 HP.',              type: ItemType.Consumable, rarity: ItemRarity.Common,   stackable: true, maxStack: 100, value: 50,  icon: '🍖' },
+  grilled_trout:{ id: 'grilled_trout',name: 'Grilled Trout',description: 'Restores 80 HP.',               type: ItemType.Consumable, rarity: ItemRarity.Common,   stackable: true, maxStack: 100, value: 25,  icon: '🍖', healAmount: 80 },
+  cooked_salmon:{ id: 'cooked_salmon',name: 'Cooked Salmon',description: 'Restores 140 HP.',              type: ItemType.Consumable, rarity: ItemRarity.Common,   stackable: true, maxStack: 100, value: 50,  icon: '🍖', healAmount: 140 },
 
   // ─── Taming Items ─────────────────────────────────────────────────────────
   taming_snare: { id: 'taming_snare', name: 'Taming Snare', description: 'Basic capture tool. Works on Common pets.', type: ItemType.TamingItem, rarity: ItemRarity.Common, stackable: true, maxStack: 20, value: 50,  icon: '🎯' },
