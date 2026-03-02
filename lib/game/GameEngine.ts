@@ -500,9 +500,19 @@ export class GameEngine {
         }
         // During dash, pet stays at its current (warped) position — no lerp
       } else {
-        // Smooth follow: lerp toward goal position
-        const dx = goalX - pos.x
-        const dy = goalY - pos.y
+        // Check if a mob is nearby — pet should move to engage instead of trailing behind
+        let moveTargetX = goalX
+        let moveTargetY = goalY
+        const combatMob = this.mobSpawner.getMobAt(p.x + 0.5, p.y + 0.5, 5)
+        if (combatMob && combatMob.state === 'chase') {
+          // Move to an intercept position between player and mob
+          moveTargetX = combatMob.x + 0.5 - 0.5
+          moveTargetY = combatMob.y + 0.5 - 0.5
+        }
+
+        // Smooth follow: lerp toward target position
+        const dx = moveTargetX - pos.x
+        const dy = moveTargetY - pos.y
         const dist = Math.sqrt(dx * dx + dy * dy)
 
         if (dist > 8) {
@@ -550,7 +560,7 @@ export class GameEngine {
 
       // ── Pet combat AI ──────────────────────────────────────────────────────
       // Check every 3 ticks (~10 Hz) to keep overhead low
-      if (this.tickCount % 3 === 0 && pet.activeAbilities.length > 0) {
+      if (this.tickCount % 3 === 0) {
         const petCx = pos.x + 0.5
         const petCy = pos.y + 0.5
         const searchRadius = Math.max(4.25, ...pet.activeAbilities.map(id => ABILITIES[id]?.range ?? 0))
@@ -558,6 +568,8 @@ export class GameEngine {
         if (nearbyMob) {
           const mobDist = Math.sqrt((nearbyMob.x + 0.5 - petCx) ** 2 + (nearbyMob.y + 0.5 - petCy) ** 2)
           const cooldowns = this.petAbilityCooldowns.get(pet.instanceId) ?? {}
+
+          let usedAbility = false
           for (const abilityId of pet.activeAbilities) {
             const ability = ABILITIES[abilityId]
             if (!ability || ability.isPassive || ability.basePower === 0) continue
@@ -601,7 +613,33 @@ export class GameEngine {
                 this.onMobDied(result)
                 this.petSystem.awardPetXP(pet.instanceId, 20 + nearbyMob.level * 5)
               }
+              usedAbility = true
               break
+            }
+          }
+
+          // ── Auto-attack: basic melee when no ability is ready ────────────
+          if (!usedAbility && mobDist <= 2.0) {
+            const autoAtkKey = '__auto__'
+            const lastAuto = cooldowns[autoAtkKey] ?? 0
+            const autoCooldown = 1.5  // seconds between auto-attacks
+            if (nowSec - lastAuto >= autoCooldown) {
+              cooldowns[autoAtkKey] = nowSec
+              this.petAbilityCooldowns.set(pet.instanceId, cooldowns)
+
+              const dmg = Math.max(1, Math.floor(pet.stats.atk * 0.8) - nearbyMob.def)
+              const result = this.mobSpawner.damageMob(nearbyMob.id, dmg)
+
+              this.entityRenderer.spawnAttackEffect(nearbyMob.x + 0.5, nearbyMob.y + 0.5)
+              if (result) {
+                this.entityRenderer.flash(`mob_${nearbyMob.id}`, 0xffaa44, 100)
+                this.entityRenderer.spawnDamageNumber(nearbyMob.x + 0.5, nearbyMob.y + 0.5, dmg, '#ffcc66')
+              }
+
+              if (result?.state === 'dead') {
+                this.onMobDied(result)
+                this.petSystem.awardPetXP(pet.instanceId, 20 + nearbyMob.level * 5)
+              }
             }
           }
         }
