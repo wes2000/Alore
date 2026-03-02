@@ -12,6 +12,7 @@ import DialoguePanel from './panels/DialoguePanel'
 import BestiaryPanel from './panels/BestiaryPanel'
 import MapPanel from './panels/MapPanel'
 import Hotbar from './Hotbar'
+import SpellPanel from './panels/SpellPanel'
 
 const CREAM  = '#F0E8C8'
 const BLACK  = '#181818'
@@ -156,12 +157,13 @@ export default function HUD({ engine }: HUDProps) {
           { label: 'CRF', panel: 'crafting',  hotkey: 'C' },
           { label: 'QST', panel: 'quests',    hotkey: 'J' },
           { label: 'BST', panel: 'bestiary',  hotkey: 'B' },
+          { label: 'SPL', panel: 'spells',    hotkey: 'K' },
         ].map(({ label, panel: p, hotkey }) => {
           const isActive = activePanel === p
           return (
             <button
               key={p}
-              onClick={() => togglePanel(p as 'skills' | 'pets' | 'inventory' | 'map' | 'crafting' | 'quests' | 'bestiary')}
+              onClick={() => togglePanel(p as 'skills' | 'pets' | 'inventory' | 'map' | 'crafting' | 'quests' | 'bestiary' | 'spells')}
               style={{
                 ...panel,
                 padding: '5px 7px',
@@ -269,6 +271,9 @@ export default function HUD({ engine }: HUDProps) {
       {/* ── World Map overlay ── */}
       <MapPanel engine={engine} />
 
+      {/* ── Spellbook overlay ── */}
+      <SpellPanel engine={engine} />
+
       {/* ── Hotbar (bottom center) ── */}
       <Hotbar engine={engine} />
 
@@ -279,7 +284,8 @@ export default function HUD({ engine }: HUDProps) {
       >
         <div>WASD MOVE  SHIFT SPRINT</div>
         <div>SPACE ATK  E INTERACT</div>
-        <div>Q SPELL  1-9 HOTBAR</div>
+        <div>Q CYCLE SPELL  K SPELLBOOK</div>
+        <div>1-9 HOTBAR</div>
       </div>
     </div>
   )

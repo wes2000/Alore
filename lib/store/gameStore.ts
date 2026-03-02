@@ -8,7 +8,7 @@ interface Notification {
   expiresAt: number
 }
 
-type PanelName = 'skills' | 'pets' | 'inventory' | 'map' | 'crafting' | 'quests' | 'bestiary'
+type PanelName = 'skills' | 'pets' | 'inventory' | 'map' | 'crafting' | 'quests' | 'bestiary' | 'spells'
 
 interface DialogueState {
   npcId: string

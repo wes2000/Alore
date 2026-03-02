@@ -123,7 +123,10 @@ export default function GameCanvas() {
       const combo = (now - engine.playerState.lastComboTime < 1500)
         ? engine.playerState.comboHitCount : 0
       store.setComboCount(combo)
-    }, 2000)
+      // Sync combat style and active spell name
+      store.setCombatStyle(engine.playerState.combatStyle ?? 'melee')
+      store.setActiveSpellName(engine.getActiveSpellName())
+    }, 500)
     return () => clearInterval(tick)
   }, [store])
 
@@ -136,6 +139,7 @@ export default function GameCanvas() {
       if (e.code === 'Tab')  { e.preventDefault(); store.togglePanel('inventory') }
       if (e.code === 'KeyM')   store.togglePanel('map')
       if (e.code === 'KeyB')   store.togglePanel('bestiary')
+      if (e.code === 'KeyK')   store.togglePanel('spells')
       if (e.code === 'Escape') store.setPanel(null)
       if (e.code === 'Equal' || e.code === 'NumpadAdd') {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

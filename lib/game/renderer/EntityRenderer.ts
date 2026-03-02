@@ -293,6 +293,186 @@ export class EntityRenderer {
   }
 
   /**
+   * Spawn a spell projectile that travels from caster to target position.
+   * spellType determines the color/style of the effect.
+   */
+  spawnSpellProjectile(
+    fromX: number, fromY: number,
+    toX: number, toY: number,
+    spellColor: number,
+    trailColor: number,
+    onHit?: () => void,
+  ): void {
+    const DURATION = 250
+    const start = performance.now()
+
+    // Main projectile
+    const geo = new THREE.PlaneGeometry(0.4, 0.4)
+    const mat = new THREE.MeshBasicMaterial({ color: spellColor, transparent: true, depthWrite: false })
+    const mesh = new THREE.Mesh(geo, mat)
+    mesh.position.set(fromX, -fromY, 0.75)
+    this.scene.add(mesh)
+
+    // Trail particles
+    const trails: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; geo: THREE.PlaneGeometry; bornAt: number }[] = []
+    let lastTrail = 0
+
+    const tick = () => {
+      const now = performance.now()
+      const t = Math.min((now - start) / DURATION, 1)
+      const x = fromX + (toX - fromX) * t
+      const y = fromY + (toY - fromY) * t
+      mesh.position.set(x, -y, 0.75)
+
+      // Pulse size
+      const pulse = 0.9 + Math.sin(t * Math.PI * 4) * 0.15
+      mesh.scale.set(pulse, pulse, 1)
+
+      // Spawn trail particles every 40ms
+      if (now - lastTrail > 40) {
+        lastTrail = now
+        const tGeo = new THREE.PlaneGeometry(0.2, 0.2)
+        const tMat = new THREE.MeshBasicMaterial({ color: trailColor, transparent: true, depthWrite: false })
+        const tMesh = new THREE.Mesh(tGeo, tMat)
+        tMesh.position.set(x + (Math.random() - 0.5) * 0.2, -y + (Math.random() - 0.5) * 0.2, 0.7)
+        this.scene.add(tMesh)
+        trails.push({ mesh: tMesh, mat: tMat, geo: tGeo, bornAt: now })
+      }
+
+      // Fade trail particles
+      for (let i = trails.length - 1; i >= 0; i--) {
+        const age = (now - trails[i].bornAt) / 200
+        if (age >= 1) {
+          this.scene.remove(trails[i].mesh)
+          trails[i].geo.dispose()
+          trails[i].mat.dispose()
+          trails.splice(i, 1)
+        } else {
+          trails[i].mat.opacity = 1 - age
+          const s = 1 - age * 0.5
+          trails[i].mesh.scale.set(s, s, 1)
+        }
+      }
+
+      if (t < 1) {
+        requestAnimationFrame(tick)
+      } else {
+        // Impact
+        this.scene.remove(mesh)
+        geo.dispose()
+        mat.dispose()
+        // Clean up remaining trails
+        for (const tr of trails) {
+          this.scene.remove(tr.mesh)
+          tr.geo.dispose()
+          tr.mat.dispose()
+        }
+        trails.length = 0
+        // Impact burst
+        this.spawnSpellImpact(toX, toY, spellColor)
+        onHit?.()
+      }
+    }
+    requestAnimationFrame(tick)
+  }
+
+  /**
+   * Spawn an AoE ring effect expanding outward.
+   */
+  spawnAoEEffect(cx: number, cy: number, radius: number, color: number): void {
+    const DURATION = 400
+    const start = performance.now()
+
+    const ringGeo = new THREE.RingGeometry(0.1, 0.3, 24)
+    const ringMat = new THREE.MeshBasicMaterial({ color, transparent: true, side: THREE.DoubleSide, depthWrite: false })
+    const ring = new THREE.Mesh(ringGeo, ringMat)
+    ring.position.set(cx, -cy, 0.7)
+    ring.rotation.x = 0 // face camera (already on XY plane)
+    this.scene.add(ring)
+
+    // Inner particles
+    const particles: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; geo: THREE.PlaneGeometry; angle: number; speed: number }[] = []
+    const count = 8
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2
+      const pGeo = new THREE.PlaneGeometry(0.15, 0.15)
+      const pMat = new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false })
+      const pMesh = new THREE.Mesh(pGeo, pMat)
+      pMesh.position.set(cx, -cy, 0.72)
+      this.scene.add(pMesh)
+      particles.push({ mesh: pMesh, mat: pMat, geo: pGeo, angle, speed: radius * 2 + Math.random() })
+    }
+
+    const tick = () => {
+      const t = Math.min((performance.now() - start) / DURATION, 1)
+      const r = t * radius
+      ring.scale.set(r * 3, r * 3, 1)
+      ringMat.opacity = 1 - t
+
+      for (const p of particles) {
+        const pr = t * p.speed
+        p.mesh.position.set(
+          cx + Math.cos(p.angle) * pr,
+          -cy + Math.sin(p.angle) * pr,
+          0.72,
+        )
+        p.mat.opacity = 1 - t
+        const s = 1 - t * 0.5
+        p.mesh.scale.set(s, s, 1)
+      }
+
+      if (t < 1) {
+        requestAnimationFrame(tick)
+      } else {
+        this.scene.remove(ring)
+        ringGeo.dispose()
+        ringMat.dispose()
+        for (const p of particles) {
+          this.scene.remove(p.mesh)
+          p.geo.dispose()
+          p.mat.dispose()
+        }
+      }
+    }
+    requestAnimationFrame(tick)
+  }
+
+  /** Small impact burst for spell hits. */
+  private spawnSpellImpact(wx: number, wy: number, color: number): void {
+    const count = 6
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.4
+      const speed = 1.0 + Math.random() * 0.6
+      const vx = Math.cos(angle) * speed
+      const vy = Math.sin(angle) * speed
+
+      const geo = new THREE.PlaneGeometry(0.12, 0.12)
+      const mat = new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false })
+      const mesh = new THREE.Mesh(geo, mat)
+      mesh.position.set(wx, -wy, 0.75)
+      this.scene.add(mesh)
+
+      const DURATION = 300
+      const start = performance.now()
+
+      const tick = () => {
+        const t = Math.min((performance.now() - start) / DURATION, 1)
+        mesh.position.x = wx + vx * t
+        mesh.position.y = -wy + vy * t
+        mat.opacity = 1 - t
+        if (t < 1) {
+          requestAnimationFrame(tick)
+        } else {
+          this.scene.remove(mesh)
+          geo.dispose()
+          mat.dispose()
+        }
+      }
+      requestAnimationFrame(tick)
+    }
+  }
+
+  /**
    * Play a death animation: shrink to 0 + white flash over 300ms,
    * then spawn colored poof particles. Removes the entity after.
    */
